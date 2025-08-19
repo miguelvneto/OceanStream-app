@@ -1,0 +1,32 @@
+#:kivy 2.3.0
+#:import dp kivy.metrics.dp
+
+<SplashScreen>:
+    name: 'splash'
+
+    FloatLayout:
+        # Fundo com imagem
+        Image:
+            source: 'res/gradient.png'
+            allow_stretch: True
+            keep_ratio: False
+            size_hint: 1, 1
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+
+        # Logo
+        Image:
+            id: logo
+            source: 'res/logo.png'
+            opacity: 0
+            size_hint: None, None
+            size: dp(200), dp(200)
+            pos_hint: {'center_x': 0.5, 'center_y': 0.6}
+
+        # Título
+        Label:
+            id: title
+            text: "OceanStream"
+            font_size: dp(28)
+            color: 1, 1, 1, 0  # <- branco, mas opaco no início
+            bold: True
+            pos_hint: {'center_x': 0.5, 'center_y': 0.4}

@@ -1,0 +1,125 @@
+#:kivy 2.3.0
+#:import dp kivy.metrics.dp
+
+<Equipamento>:
+    FloatLayout:
+        id: container
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                source: 'res/gradient.png'
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint: (1, 1)
+
+            # Header
+            FloatLayout:
+                size_hint: (1, None)
+                height: dp(120)
+
+                MDIconButton:
+                    icon: "arrow-left"
+                    size_hint: (None, None)
+                    size: dp(36), dp(36)
+                    pos_hint: {"left": 1, "top": 1}
+                    theme_text_color: "Custom"
+                    text_color: 1, 1, 1, 1
+                    on_release: app.gerenciador.current = 'overview'
+
+                # Layout do título e seta (dentro do botão invisível)
+                BoxLayout:
+                    id: titulo_container
+                    orientation: "horizontal"
+                    spacing: dp(6)
+                    size_hint: None, None
+                    height: dp(40)
+                    width: dp(300)
+                    pos_hint: {"center_x": 0.5, "top": 0.8}
+
+                    MDLabel:
+                        id: titulo
+                        text: "Selecione um equipamento"
+                        font_size: dp(22)
+                        bold: True
+                        color: 1, 1, 1, 1
+                        halign: "center"
+                        valign: "middle"
+                        text_size: self.size
+                        size_hint_x: 1
+                        shorten: True
+
+                    MDIcon:
+                        id: titulo_dropdown_icon
+                        icon: "chevron-down"
+                        theme_text_color: "Custom"
+                        text_color: 1, 1, 1, 1
+                        font_size: dp(22)
+                        size_hint: None, None
+                        size: dp(32), dp(32)
+                        pos_hint: {"center_y": 0.5}
+                        canvas.before:
+                            PushMatrix
+                            Rotate:
+                                angle: self.rotation
+                                origin: self.center
+                        canvas.after:
+                            PopMatrix
+                        rotation: 0
+
+                # Botão invisível por cima da área de título
+                Button:
+                    size_hint: None, None
+                    size: dp(300), dp(40)
+                    pos_hint: {"center_x": 0.5, "top": 0.8}
+                    background_color: 0, 0, 0, 0
+                    on_release: root.open_equip_menu()
+
+            # Card branco com tabela
+            MDCard:
+                size_hint: (1, 1)
+                elevation: 4
+                radius: [dp(60), dp(60), 0, 0]
+                md_bg_color: utils.get_color_from_hex('#FFFFFF')
+                pos_hint: {'center_x': 0.5}
+                padding: [dp(30), dp(30), dp(30), 0]
+
+                BoxLayout:
+                    orientation: 'vertical'
+
+                    BoxLayout:
+                        id: box_dt
+                        size_hint_y: None
+                        height: dp(50)
+                        spacing: dp(10)
+
+                    GridLayout:
+                        id: header_table
+                        size_hint_y: None
+                        height: dp(40)
+                        spacing: dp(5)
+                        cols_minimum: {0: dp(100)}  # Primeira coluna com largura maior
+                        canvas.before:
+                            Color:
+                                rgba: 0.8, 0.8, 0.8, 1
+                            Rectangle:
+                                pos: self.pos
+                                size: self.size
+
+                    ScrollView:
+                        GridLayout:
+                            id: data_table
+                            size_hint_y: None
+                            height: self.minimum_height
+                            row_default_height: dp(40)
+                            spacing: dp(5)
+                            cols_minimum: {0: dp(100)}  # Primeira coluna com largura maior
+                            canvas.before:
+                                Color:
+                                    rgba: 0.9, 0.9, 0.9, 1
+                                Rectangle:
+                                    pos: self.pos
+                                    size: self.size

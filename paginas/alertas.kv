@@ -1,0 +1,12 @@
+#:kivy 2.3.0
+<Alertas>:
+    BoxLayout:
+        canvas.before:
+            Color:
+                rgba: 0, 0, 1, 1  # azul (RGBA: 0% vermelho, 0% verde, 100% azul, 100% opacidade)
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        MDLabel:
+            text: "Alertas"
+            halign: "center"

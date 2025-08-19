@@ -1,0 +1,27 @@
+linguagem utilizada no desenvolvimento: python v3.12.3
+SO: Windows 10 Pro x64 22H2
+versão do vscode: 1.92.1 (user setup)
+
+caso vá utilizar o terminal do vscode, abra o PowerShell como administrador e execute este comando:
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+[na resposta, escolher Sim/Yes]
+
+~ instruções para preparar o ambiente virtual de desenvolvimento:
+
+com o terminal aberto no diretório raiz do projeto, criar o ambiente virtual:
+python -m venv venv
+
+ativar o ambiente virtual: 
+venv/Scripts/Activate.ps1
+
+inslatar as bibliotecas utilizadas no projeto:
+pip install -r requirements.txt
+
+
+para desativar o ambiente virtual:
+deactivate
+
+
+
+salvar bibliotecas:
+pip freeze > requirements.txt

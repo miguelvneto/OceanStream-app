@@ -1,0 +1,92 @@
+{
+    "nome": "Overview - Cards",
+    "atualizado_em": "2025-08-19 17:12:26.405409",
+    "cartoes": [
+        {
+            "maximize": true,
+            "text": "Boia 10",
+            "selecionado": [
+                "Bateria",
+                "Pitch",
+                "Roll",
+                "Vel. Corr.",
+                "Dir. Corr.",
+                "Altura Onda",
+                "Período Onda"
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Boia 08",
+            "selecionado": [
+                "Bateria",
+                "Período Onda",
+                "Altura Onda",
+                "Dir. Corr.",
+                "Vel. Corr."
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Boia 04",
+            "selecionado": [
+                "Dir. Corr.",
+                "Período Onda",
+                "Vel. Corr.",
+                "Altura Onda",
+                "Bateria",
+                "Pitch",
+                "Roll"
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo Píer II",
+            "selecionado": [
+                "Altura",
+                "Período"
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo TGL",
+            "selecionado": [
+                "Período",
+                "Altura"
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo TPD",
+            "selecionado": [
+                "Altura",
+                "Período"
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo TPM",
+            "selecionado": [
+                "Período",
+                "Altura"
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Marégrafo",
+            "selecionado": [
+                "Maré Reduzida"
+            ]
+        },
+        {
+            "maximize": true,
+            "text": "Estação Meteorológica",
+            "selecionado": [
+                "Vel. Vento",
+                "Rajada",
+                "Dir. Vento",
+                "Chuva"
+            ]
+        }
+    ]
+}
