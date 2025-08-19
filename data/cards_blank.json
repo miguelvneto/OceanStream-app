@@ -1,0 +1,51 @@
+{
+    "nome": "Overview - Cards",
+    "atualizado_em": "2025-03-20 03:28:32.788387",
+    "cartoes": [
+        {
+            "maximize": true,
+            "text": "Boia 10",
+            "selecionado": []
+        },
+        {
+            "maximize": true,
+            "text": "Boia 08",
+            "selecionado": []
+        },
+        {
+            "maximize": false,
+            "text": "Boia 04",
+            "selecionado": []
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo Píer II",
+            "selecionado": []
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo TGL",
+            "selecionado": []
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo TPD",
+            "selecionado": []
+        },
+        {
+            "maximize": true,
+            "text": "Ondógrafo TPM",
+            "selecionado": []
+        },
+        {
+            "maximize": true,
+            "text": "Marégrafo",
+            "selecionado": []
+        },
+        {
+            "maximize": false,
+            "text": "Estação Meteorológica",
+            "selecionado": []
+        }
+    ]
+}

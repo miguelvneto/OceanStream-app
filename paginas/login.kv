@@ -1,0 +1,144 @@
+#:kivy 2.3.0
+#:import dp kivy.metrics.dp
+
+<TelaLogin>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                source: 'res/gradient.png'
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            orientation: 'vertical'
+            padding: dp(20)
+            spacing: dp(10)
+            size_hint: (1, 1)
+
+            # Título com imagem
+            BoxLayout:
+                orientation: 'horizontal'
+                size_hint_y: None
+                height: dp(100)
+                spacing: dp(10)
+                padding: dp(20)
+
+                Image:
+                    source: 'res/logo.png'
+                    size_hint: None, None
+                    size: dp(60), dp(60)
+                    allow_stretch: True
+                    keep_ratio: True
+
+                Label:
+                    text: "OceanStream"
+                    font_size: dp(32)
+                    bold: True
+                    color: (1, 1, 1, 1)
+                    halign: 'left'
+                    valign: 'middle'
+        
+            # Card branco com sombra
+            MDCard:
+                size_hint: (1, None)
+                height: dp(440)
+                padding: [dp(30), dp(30), dp(30), dp(30)]
+                radius: [dp(20)]
+                elevation: 6
+                md_bg_color: utils.get_color_from_hex("#FFFFFF")
+                pos_hint: {"center_x": 0.5}
+
+                BoxLayout:
+                    orientation: 'vertical'
+                    spacing: dp(12)
+
+                    # Título principal
+                    Label:
+                        text: "Seja bem-vindo"
+                        font_size: dp(24)
+                        bold: True
+                        halign: "left"
+                        valign: "middle"
+                        color: utils.get_color_from_hex("#04949c")
+                        size_hint_y: None
+                        height: dp(30)
+                        text_size: self.width, None
+
+                    # Subtítulo em preto
+                    Label:
+                        text: "Faça o login para continuar"
+                        font_size: dp(16)
+                        color: (0, 0, 0, 1)
+                        halign: "left"
+                        valign: "middle"
+                        size_hint_y: None
+                        height: dp(22)
+                        text_size: self.width, None
+
+                    MDTextField:
+                        id: email
+                        hint_text: "Digite seu e-mail"
+                        text: ""
+                        mode: "fill"
+                        icon_left: "email"
+                        size_hint_y: None
+                        height: dp(56)
+
+                    RelativeLayout:
+                        size_hint_y: None
+                        height: dp(56)
+
+                        MDTextField:
+                            id: senha
+                            hint_text: "Digite sua senha"
+                            text: ""
+                            password: True
+                            mode: "fill"
+                            icon_left: "lock"
+                            size_hint_y: None
+                            height: dp(56)
+                            pos_hint: {"center_y": 0.5}
+
+                        MDIconButton:
+                            id: toggle_pass
+                            icon: "eye-off"
+                            pos_hint: {"center_y": 0.5, "right": 1}
+                            on_release:
+                                senha.password = not senha.password
+                                toggle_pass.icon = "eye" if not senha.password else "eye-off"
+
+                    Label:
+                        id: error_message
+                        text: ""
+                        color: (1, 0, 0, 1)  # Vermelho
+                        font_size: dp(14)
+                        halign: "center"
+                        size_hint_y: None
+                        height: dp(20)
+                        opacity: 0  # Inicialmente invisível
+
+                    MDRaisedButton:
+                        text: "Entrar"
+                        md_bg_color: utils.get_color_from_hex("#04949c")
+                        text_color: (1, 1, 1, 1)
+                        size_hint_y: None
+                        height: dp(48)
+                        on_release: root.submit()
+
+                    Label:
+                        id: error_message
+                        text: ""
+                        color: (1, 0, 0, 1)
+                        font_size: dp(14)
+                        halign: "center"
+                        size_hint_y: None
+                        height: dp(20)
+
+                    MDFlatButton:
+                        text: "Não possui cadastro? Clique aqui"
+                        text_color: utils.get_color_from_hex("#04949c")
+                        font_size: dp(14)
+                        pos_hint: {"center_x": 0.5}
+                        on_release: app.root.current = 'register'
