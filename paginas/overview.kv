@@ -2,12 +2,22 @@
 #:import utils kivy.utils
 #:import dp kivy.metrics.dp
 
+# Remova o estilo global de Label branco. Se quiser um default, use preto:
 <Label>:
     font_size: dp(18)
-    color: utils.get_color_from_hex('#FFFFFF')
+    color: 0, 0, 0, 1
     text_size: self.width, None
     valign: 'middle'
     halign: 'center'
+
+# Crie um estilo só para o título do topo (branco)
+<HeaderTitle@Label>:
+    font_size: dp(28)
+    bold: True
+    color: 1, 1, 1, 1
+    text_size: self.width - dp(32), None
+    halign: 'center'
+    valign: 'middle'
 
 <Overview>:
     FloatLayout:
@@ -15,33 +25,43 @@
             Color:
                 rgba: 1, 1, 1, 1
             Rectangle:
+                # Se o gradient não existir, fica branco mesmo (ok)
                 source: 'res/gradient.png'
                 pos: self.pos
                 size: self.size
 
         BoxLayout:
             orientation: 'vertical'
-            size_hint: (1, 1)
+            size_hint: 1, 1
+            spacing: 0
 
-            # Header
-            Label:
-                text: 'Porto de Tubarão - Overview'
-                font_size: dp(30)
-                bold: True
-                color: utils.get_color_from_hex('#FFFFFF')
-                size_hint: (1, None)
-                height: dp(80)
-                pos_hint: {'top': 1, 'x': 0}
+            # Espaçador da safe area (notch/status bar)
+            Widget:
+                size_hint_y: None
+                height: app.safe_top
+
+            # Barra superior com fundo colorido para garantir contraste
+            BoxLayout:
+                size_hint_y: None
+                height: dp(64)
+                padding: dp(16), 0
+                # canvas.before:
+                    # Color:
+                    #     rgba: utils.get_color_from_hex('#04949c')  # teal
+                    # Rectangle:
+                    #     pos: self.pos
+                    #     size: self.size
+                HeaderTitle:
+                    text: 'Porto de Tubarão - Overview'
 
             # Card branco principal
             MDCard:
                 id: main_card
-                padding: [0, dp(25), 0, dp(5)]
-                size_hint: (1, 1)
+                padding: [0, dp(25), 0, (app.safe_bottom if app.safe_bottom > 0 else dp(5))]
+                size_hint: 1, 1
                 elevation: 4
                 radius: [dp(60), dp(60), 0, 0]
-                md_bg_color: utils.get_color_from_hex('#FFFFFF')
-                pos_hint: {'center_x': 0.5}
+                md_bg_color: 1, 1, 1, 1
 
                 ScrollView:
                     do_scroll_x: False
@@ -50,10 +70,10 @@
                     BoxLayout:
                         id: card_container
                         orientation: 'vertical'
-                        spacing: dp(5)
-                        padding: dp(50)
+                        spacing: dp(8)
+                        padding: dp(16), dp(12)
                         size_hint_y: None
-                        height: self.minimum_height  # Ajusta a altura conforme os widgets adicionados
+                        height: self.minimum_height
 
 <CardOverview@MDCard>:
     size_hint: 1, None
