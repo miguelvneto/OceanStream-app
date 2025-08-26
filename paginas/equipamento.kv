@@ -1,5 +1,14 @@
 #:kivy 2.3.0
+#:import utils kivy.utils
 #:import dp kivy.metrics.dp
+
+<HeaderTitle@Label>:
+    font_size: dp(22)
+    bold: True
+    color: 1, 1, 1, 1
+    text_size: self.width - dp(16), None
+    halign: 'center'
+    valign: 'middle'
 
 <Equipamento>:
     FloatLayout:
@@ -12,114 +21,163 @@
                 pos: self.pos
                 size: self.size
 
+        # SCRIM (véu) para quando o drawer estiver aberto
+        Button:
+            id: drawer_scrim
+            background_color: 0, 0, 0, 0
+            opacity: 0
+            disabled: True
+            size_hint: 1, 1
+            on_release: root.close_equipment_drawer()
+
         BoxLayout:
             orientation: 'vertical'
-            size_hint: (1, 1)
+            size_hint: 1, 1
+            spacing: 0
 
-            # Header
-            FloatLayout:
-                size_hint: (1, None)
-                height: dp(120)
+            # Safe area (notch / status bar)
+            Widget:
+                size_hint_y: None
+                height: app.safe_top
 
+            # HEADER
+            BoxLayout:
+                orientation: 'horizontal'
+                size_hint_y: None
+                height: dp(64)
+                padding: [dp(8), 0, dp(8), 0]
+                spacing: dp(8)
+                #canvas.before:
+                    #Color:
+                        #rgba: utils.get_color_from_hex('#04949c')
+                    #Rectangle:
+                        #pos: self.pos
+                        #size: self.size
+
+                # Voltar
                 MDIconButton:
                     icon: "arrow-left"
-                    size_hint: (None, None)
-                    size: dp(36), dp(36)
-                    pos_hint: {"left": 1, "top": 1}
+                    size_hint: None, None
+                    size: dp(40), dp(40)
                     theme_text_color: "Custom"
                     text_color: 1, 1, 1, 1
                     on_release: app.gerenciador.current = 'overview'
 
-                # Layout do título e seta (dentro do botão invisível)
+                # Título central
                 BoxLayout:
-                    id: titulo_container
                     orientation: "horizontal"
-                    spacing: dp(6)
-                    size_hint: None, None
-                    height: dp(40)
-                    width: dp(300)
-                    pos_hint: {"center_x": 0.5, "top": 0.8}
+                    size_hint_x: 1
+                    padding: [0, 0, 0, 0]
 
-                    MDLabel:
+                    HeaderTitle:
                         id: titulo
-                        text: "Selecione um equipamento"
+                        text: "Equipamentos"
                         font_size: dp(22)
                         bold: True
-                        color: 1, 1, 1, 1
                         halign: "center"
                         valign: "middle"
                         text_size: self.size
-                        size_hint_x: 1
                         shorten: True
 
-                    MDIcon:
-                        id: titulo_dropdown_icon
-                        icon: "chevron-down"
-                        theme_text_color: "Custom"
-                        text_color: 1, 1, 1, 1
-                        font_size: dp(22)
-                        size_hint: None, None
-                        size: dp(32), dp(32)
-                        pos_hint: {"center_y": 0.5}
-                        canvas.before:
-                            PushMatrix
-                            Rotate:
-                                angle: self.rotation
-                                origin: self.center
-                        canvas.after:
-                            PopMatrix
-                        rotation: 0
-
-                # Botão invisível por cima da área de título
-                Button:
+                # Ícone sanduíche (abre o drawer)
+                MDIconButton:
+                    icon: "menu"
                     size_hint: None, None
-                    size: dp(300), dp(40)
-                    pos_hint: {"center_x": 0.5, "top": 0.8}
-                    background_color: 0, 0, 0, 0
-                    on_release: root.open_equip_menu()
+                    size: dp(40), dp(40)
+                    theme_text_color: "Custom"
+                    text_color: 1, 1, 1, 1
+                    on_release: root.open_equipment_drawer()
 
-            # Card branco com tabela
+            # CARD branco com conteúdo (tabela), respeitando a safe area inferior
             MDCard:
-                size_hint: (1, 1)
+                size_hint: 1, 1
                 elevation: 4
                 radius: [dp(60), dp(60), 0, 0]
                 md_bg_color: utils.get_color_from_hex('#FFFFFF')
-                pos_hint: {'center_x': 0.5}
-                padding: [dp(30), dp(30), dp(30), 0]
+                padding: [dp(16), dp(20), dp(16), max(app.safe_bottom, dp(8))]
 
                 BoxLayout:
                     orientation: 'vertical'
+                    spacing: dp(8)
 
+                    # Barra com seleção de datas (preenchida via Python)
                     BoxLayout:
                         id: box_dt
                         size_hint_y: None
                         height: dp(50)
                         spacing: dp(10)
 
+                    # Cabeçalho da tabela
                     GridLayout:
                         id: header_table
                         size_hint_y: None
                         height: dp(40)
                         spacing: dp(5)
-                        cols_minimum: {0: dp(100)}  # Primeira coluna com largura maior
+                        cols_minimum: {0: dp(100)}
                         canvas.before:
                             Color:
-                                rgba: 0.8, 0.8, 0.8, 1
+                                rgba: 0.93, 0.93, 0.95, 1
                             Rectangle:
                                 pos: self.pos
                                 size: self.size
 
+                    # Dados
                     ScrollView:
+                        do_scroll_x: False
+                        do_scroll_y: True
+
                         GridLayout:
                             id: data_table
                             size_hint_y: None
                             height: self.minimum_height
                             row_default_height: dp(40)
                             spacing: dp(5)
-                            cols_minimum: {0: dp(100)}  # Primeira coluna com largura maior
+                            cols_minimum: {0: dp(100)}
                             canvas.before:
                                 Color:
-                                    rgba: 0.9, 0.9, 0.9, 1
+                                    rgba: 0.97, 0.97, 0.98, 1
                                 Rectangle:
                                     pos: self.pos
                                     size: self.size
+
+        # DRAWER lateral à direita
+        RelativeLayout:
+            id: right_drawer
+            size_hint: None, 1
+            width: max(dp(340), min(root.width * 0.88, dp(520)))
+            x: root.width   # começa fora da tela (oculto)
+            canvas.before:
+                Color:
+                    rgba: utils.get_color_from_hex('#1E1E1E')
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+                Color:
+                    rgba: 0, 0, 0, 0.12
+                Line:
+                    points: self.x, self.y, self.x, self.top
+                    width: 1
+
+            BoxLayout:
+                orientation: 'vertical'
+                padding: [dp(12), dp(12), dp(12), max(app.safe_bottom, dp(12))]
+                spacing: dp(8)
+
+                # Safe top dentro do drawer
+                Widget:
+                    size_hint_y: None
+                    height: app.safe_top
+
+                Label:
+                    text: "Selecionar equipamento"
+                    color: 1, 1, 1, 1 
+                    font_size: dp(18)
+                    size_hint_y: None
+                    height: dp(32)
+
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+
+                    MDList:
+                        id: drawer_list

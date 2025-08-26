@@ -1,334 +1,340 @@
-from kivymd.app import MDApp
-from kivymd.uix.button import MDRectangleFlatButton, MDRaisedButton
-from kivymd.uix.card import MDCard
-from kivymd.uix.label import MDLabel
-from kivymd.uix.menu import MDDropdownMenu
-from kivymd.uix.pickers import MDDatePicker
-from kivymd.uix.screen import MDScreen
-from kivymd.uix.screenmanager import MDScreenManager
-from kivymd.uix.selectioncontrol import MDCheckbox
-from kivy_garden.matplotlib import FigureCanvasKivyAgg
-from kivy.animation import Animation
-from kivy.clock import Clock
+# main.py
+# OceanStream – Kivy/KivyMD (iOS + desktop)
+# Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
+
+from kivy.resources import resource_add_path, resource_find
+import glob
+
 from kivy.config import Config
-from kivy.core.window import Window
-from kivy.lang import Builder
-from kivy.logger import Logger
-from kivy.metrics import dp
-from kivy.properties import ObjectProperty, ListProperty
-from kivy.uix.image import Image
-from kivy.uix.scrollview import ScrollView
-from kivy.utils import platform
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.label import Label
-from kivy.uix.widget import Widget
-from plyer import storagepath
-from datetime import datetime, timedelta
-import json
-import requests
-import os
-import jwt
-from threading import Thread
-import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use("Agg")  # Backend não interativo (sem UI)
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
-
-class StyledCheckbox(MDCheckbox):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.inactive_color = (1, 1, 1, 1)  # Fundo branco quando desmarcado
-        self.active_color = (0.2, 0.6, 1, 1)
-        self.size = (dp(48), dp(48))
-        self.line_color_normal = (0.8, 0.8, 0.8, 1)  # Borda cinza claro antes de ser selecionado
-
-    def animate_checkbox(self, state):
-        if state == "down":
-            anim = Animation(active_color=(0.2, 0.6, 1, 1), duration=0.2)  # Azul vibrante quando marcado
-        else:
-            anim = Animation(active_color=(1, 1, 1, 1), duration=0.2)  # Mantém fundo branco quando desmarcado
-        anim.start(self)
-
 Config.set('graphics', 'multisamples', '0')
 
-from navigation_bar import NavigationBar  # Importando a barra de navegação
+from kivy.utils import platform
+IS_IOS = (platform == "ios")
+IS_ANDROID = (platform == "android")
 
+from kivy.properties import NumericProperty
+from kivy.core.window import Window
+from kivy.lang import Builder
+from kivy.metrics import dp
+from kivy.clock import Clock
+from kivy.animation import Animation
+from kivy.logger import Logger
+from kivy.app import App
 
-# Mapeamento de parâmetros para imagens
+from kivy.uix.widget import Widget
+from kivy.uix.image import Image
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+
+from kivymd.app import MDApp
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.screenmanager import MDScreenManager
+from kivymd.uix.card import MDCard
+from kivymd.uix.button import MDRectangleFlatButton, MDRaisedButton, MDIconButton, MDFlatButton
+from kivymd.uix.selectioncontrol import MDCheckbox
+from kivymd.uix.pickers import MDDatePicker
+from kivymd.uix.menu import MDDropdownMenu
+from kivymd.uix.label import MDLabel
+from kivymd.uix.list import OneLineListItem
+
+from plyer import storagepath
+
+import os, json, requests, jwt, ssl
+from datetime import datetime, timedelta
+from threading import Thread
+
+# --- SSL relax (se seu backend exigir) ---
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# --- tentar importar sua barra de navegação; cria stub se ausente ---
+try:
+    from navigation_bar import NavigationBar
+except Exception:
+    class NavigationBar(Widget):
+        def __init__(self, screen_manager=None, logout_callback=None, **kw):
+            super().__init__(**kw)
+            self.size_hint = (1, None)
+            self.height = dp(1)  # stub invisível
+            self.logout_callback = logout_callback
+
+# --- caminhos de recursos (iOS-friendly) ---
+try:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+except Exception:
+    APP_DIR = os.getcwd()
+
+# garanta que o Kivy procura recursos no app, /res e /data
+for p in {APP_DIR, os.path.join(APP_DIR, "res"), os.path.join(APP_DIR, "data")}:
+    try:
+        resource_add_path(p)
+    except Exception:
+        pass
+
+# =====================================================================
+#                   ARQUIVOS / DADOS DO APP (iOS-safe)
+# =====================================================================
+
+def app_data_dir():
+    """Diretório de dados de usuário do app (escrita permitida no iOS)."""
+    try:
+        app = App.get_running_app()
+        if app and getattr(app, "user_data_dir", None):
+            os.makedirs(app.user_data_dir, exist_ok=True)
+            return app.user_data_dir
+    except Exception:
+        pass
+    # Fallback
+    try:
+        d = storagepath.get_home_dir()
+        if d:
+            os.makedirs(d, exist_ok=True)
+            return d
+    except Exception:
+        pass
+    d = os.getcwd()
+    os.makedirs(d, exist_ok=True)
+    return d
+
+def data_path(filename):
+    return os.path.join(app_data_dir(), filename)
+
+# =====================================================================
+#                          API / AUTENTICAÇÃO
+# =====================================================================
+
+API_PRFX = "https://oceanstream-8b3329b99e40.herokuapp.com/"
+JWT_FILE = "oceanstream.jwt"
+HTTP_TIMEOUT = 25
+
+def _token_file():
+    return data_path(JWT_FILE)
+
+def store_access_token(token: str):
+    try:
+        with open(_token_file(), "w") as f:
+            f.write(token or "")
+        Logger.info(f"Auth: token salvo em {_token_file()}")
+    except Exception as e:
+        Logger.exception(f"Auth: erro ao salvar token: {e}")
+
+def get_access_token() -> str:
+    try:
+        p = _token_file()
+        if os.path.exists(p):
+            with open(p, "r") as f:
+                return (f.read() or "").strip()
+    except Exception as e:
+        Logger.exception(f"Auth: erro ao ler token: {e}")
+    return ""
+
+def delete_access_token():
+    try:
+        p = _token_file()
+        if os.path.exists(p):
+            os.remove(p)
+            Logger.info("Auth: token deletado.")
+    except Exception as e:
+        Logger.exception(f"Auth: erro ao deletar token: {e}")
+
+def is_token_valid(token: str) -> bool:
+    try:
+        if not token:
+            return False
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        exp_ts = decoded.get("exp")
+        if exp_ts:
+            return datetime.fromtimestamp(exp_ts) > datetime.now()
+        return False
+    except Exception:
+        return False
+
+def _auth_headers():
+    tok = get_access_token()
+    return {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {tok}" if tok else "",
+    }
+
+def _handle_response(r: requests.Response, endpoint: str):
+    if r.status_code == 401:
+        Logger.warning(f"HTTP 401 em {endpoint} – token inválido/expirado.")
+        return {"__auth_error__": True, "__status__": 401, "__body__": r.text}
+    try:
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        Logger.exception(f"HTTP erro em {endpoint}: {e} – body: {r.text[:300]}")
+        return {"__error__": f"{type(e).__name__}: {e}", "__status__": r.status_code, "__body__": r.text}
+
+def login(email: str, senha: str):
+    url = API_PRFX + "login"
+    try:
+        r = requests.post(url, json={"email": email, "senha": senha},
+                          headers={"Content-Type": "application/json"},
+                          timeout=HTTP_TIMEOUT)
+        if r.status_code == 200:
+            data = r.json()
+            tok = data.get("accessToken") or data.get("token") or ""
+            if tok:
+                store_access_token(tok)
+                return True, ""
+            return False, "Login OK, mas token não recebido."
+        else:
+            return False, f"Falha no login: {r.status_code} – {r.text}"
+    except requests.exceptions.Timeout:
+        return False, "Timeout: servidor não respondeu"
+    except requests.exceptions.ConnectionError:
+        return False, "Sem conexão com o servidor"
+    except Exception as e:
+        return False, f"Erro: {e}"
+
+def api_dados(nome_tabela: str, start_date: str, end_date: str):
+    url = API_PRFX + "dados"
+    payload = {"tabela": nome_tabela, "dt_inicial": start_date, "dt_final": f"{end_date} 23:59:59"}
+    try:
+        r = requests.post(url, headers=_auth_headers(), json=payload, timeout=HTTP_TIMEOUT)
+        return _handle_response(r, "POST /dados")
+    except Exception as e:
+        Logger.exception(f"API /dados erro: {e}")
+        return {"__error__": str(e)}
+
+def api_ultimosDados():
+    url = API_PRFX + "ultimosDados"
+    try:
+        r = requests.get(url, headers=_auth_headers(), timeout=HTTP_TIMEOUT)
+        return _handle_response(r, "GET /ultimosDados")
+    except Exception as e:
+        Logger.exception(f"API /ultimosDados erro: {e}")
+        return {"__error__": str(e)}
+
+# =====================================================================
+#                    MAPAS / TABELAS / ARQUIVOS DE UI
+# =====================================================================
+
 PARAMETROS_IMAGENS = {
-    "Bateria":                 "res/bateria.png",                                                     # Corrente
-    "Vel. Corr.":              "res/corrente- oceanstream.png",                                       # Corrente
-    "Dir. Corr.":              "res/corrente-seta-direita.png",                                       # Corrente
-    "Pitch":                   "res/Pitch-Roll.png",                                                  # Corrente
-    "Roll":                    "res/Pitch-Roll.png",                                                  # Corrente
-    "Altura Onda":             "res/Onda com linha- oceanstream.png",                                 # Onda
-    "Período Onda":            "res/Onda - oceanstream.png",                                          # Onda
-    "Altura":                  "res/Onda com linha- oceanstream.png",                                 # Ondógrafo
-    "Período":                 "res/Onda - oceanstream.png",                                          # Ondógrafo
-    "Maré Reduzida":           "res/Regua maregrafo com seta - oceanstream (2).png",                  # Marégrafo
-    "Vel. Vento":              "res/Pressao atmosferica - oceanstream.png",                           # Est.M
-    "Rajada":                  "res/Pressao atmosferica - oceanstream.png",                           # Est.M
-    "Dir. Vento":              "res/Rosa dos ventos - com direcao de cor diferente-oceanstream.png",  # Est.M
-    "Chuva":                   "res/Chuva - oceanstream.png",                                         # Est.M
+    "Bateria":                 "res/bateria.png",
+    "Vel. Corr.":              "res/corrente- oceanstream.png",
+    "Dir. Corr.":              "res/corrente-seta-direita.png",
+    "Pitch":                   "res/Pitch-Roll.png",
+    "Roll":                    "res/Pitch-Roll.png",
+    "Altura Onda":             "res/Onda com linha- oceanstream.png",
+    "Período Onda":            "res/Onda - oceanstream.png",
+    "Altura":                  "res/Onda com linha- oceanstream.png",
+    "Período":                 "res/Onda - oceanstream.png",
+    "Maré Reduzida":           "res/Regua maregrafo com seta - oceanstream (1).png",
+    "Vel. Vento":              "res/Pressao atmosferica - oceanstream.png",
+    "Rajada":                  "res/Pressao atmosferica - oceanstream.png",
+    "Dir. Vento":              "res/Rosa dos ventos - com direcao de cor diferente-oceanstream.png",
+    "Chuva":                   "res/Chuva - oceanstream.png",
 }
-# Mapeamento dos equipamentos para os nomes das tabelas
+
 EQUIPAMENTOS_TABELAS = {
     "Boia 04 - Corrente": "ADCP-Boia04_corrente",
     "Boia 08 - Corrente": "ADCP-Boia08_corrente",
     "Boia 10 - Corrente": "ADCP-Boia10_corrente",
-    "Boia 04 - Onda": "ADCP-Boia04_onda",
-    "Boia 08 - Onda": "ADCP-Boia08_onda",
-    "Boia 10 - Onda": "ADCP-Boia10_onda",
-    "Ondógrafo Píer-II": "Ondografo-PII_tab_parametros",
-    "Ondógrafo TGL": "Ondografo-TGL_tab_parametros",
-    "Ondógrafo TPD": "Ondografo-TPD_tab_parametros",
-    "Ondógrafo TPM": "Ondografo-TPM_tab_parametros",
-    "Marégrafo": "Maregrafo-TU_Maregrafo_Troll",
+    "Boia 04 - Onda":     "ADCP-Boia04_onda",
+    "Boia 08 - Onda":     "ADCP-Boia08_onda",
+    "Boia 10 - Onda":     "ADCP-Boia10_onda",
+    "Ondógrafo Píer-II":  "Ondografo-PII_tab_parametros",
+    "Ondógrafo TGL":      "Ondografo-TGL_tab_parametros",
+    "Ondógrafo TPD":      "Ondografo-TPD_tab_parametros",
+    "Ondógrafo TPM":      "Ondografo-TPM_tab_parametros",
+    "Marégrafo":          "Maregrafo-TU_Maregrafo_Troll",
     "Estação Meteorológica": "TU_Estacao_Meteorologica"
 }
-# Cabecalho da tabela na tela Equipamento
+
 CABECALHO_TABELA = {
     '_corrente': [
-        ['TmStamp', 'Data Hora']
-        ,['PNORS_Pitch', 'Pitch']
-        ,['PNORS_Roll', 'Roll']
-        ,['vel11', 'Vel. Corr.']
-        ,['dir11', 'Direção (°)']
-        ,['PNORS_Battery_Voltage', 'Bateria (V)']
+        ['TmStamp', 'Data Hora'],
+        ['PNORS_Pitch', 'Pitch'],
+        ['PNORS_Roll', 'Roll'],
+        ['vel11', 'Vel. Corr.'],
+        ['dir11', 'Direção (°)'],
+        ['PNORS_Battery_Voltage', 'Bateria (V)'],
     ],
     '_onda': [
-        ['TmStamp', 'Data Hora']
-        ,['PNORW_Hm0', 'Altura (m)']
-        ,['PNORW_Tp', 'Período (s)']
-        ,['PNORW_DirTp', 'Direção (°)']
+        ['TmStamp', 'Data Hora'],
+        ['PNORW_Hm0', 'Altura (m)'],
+        ['PNORW_Tp', 'Período (s)'],
+        ['PNORW_DirTp', 'Direção (°)'],
     ],
     'Ondografo': [
-        ['TmStamp', 'Data Hora']
-        ,['hm0_alisado', 'Altura (m)']
-        ,['tp_alisado', 'Período (s)']
+        ['TmStamp', 'Data Hora'],
+        ['hm0_alisado', 'Altura (m)'],
+        ['tp_alisado', 'Período (s)'],
     ],
     'Estacao': [
-        ['TmStamp', 'Data Hora']
-        ,['Velocidade_Vento', 'Vel. Vento']
-        ,['Rajada_Vento', 'Rajada']
-        ,['Direcao_Vento', 'Dir. Vento (°)']
-        ,['Chuva', 'Chuva (mm)']
+        ['TmStamp', 'Data Hora'],
+        ['Velocidade_Vento', 'Vel. Vento'],
+        ['Rajada_Vento', 'Rajada'],
+        ['Direcao_Vento', 'Dir. Vento (°)'],
+        ['Chuva', 'Chuva (mm)'],
     ],
     'Maregrafo': [
-        ['TmStamp', 'Data Hora']
-        ,['Mare_Reduzida', 'Maré Reduzida (m)']
-    ]
+        ['TmStamp', 'Data Hora'],
+        ['Mare_Reduzida', 'Maré Reduzida (m)'],
+    ],
 }
-### JWT
-JWT_FILE = "oceanstream.jwt"
 
-def get_storage_path():
-    if platform == 'android':
-        from android.storage import app_storage_path
-        return app_storage_path()
-    else:
-        return storagepath.get_home_dir()
+# ----------------- JSON configs (cards) no user_data_dir -----------------
 
-def store_access_token(token):
-    app_storage_dir = get_storage_path()
-    token_file_path = os.path.join(app_storage_dir, JWT_FILE)
-    try:
-        with open(token_file_path, 'w') as token_file:
-            token_file.write(token)
-        Logger.info(f"Token salvo em {token_file_path}")
-    except Exception as e:
-        Logger.error(f"Erro ao salvar token: {str(e)}")
+CARDS_JSON_NAME = "cards.json"
+CARDS_JSON_BUNDLED = "data/cards.json"  # arquivo read-only dentro do app
 
-def get_access_token():
-    app_storage_dir = get_storage_path()
-    token_file_path = os.path.join(app_storage_dir, JWT_FILE)
-    if os.path.exists(token_file_path):
+def load_cards_json():
+    """Carrega cards do user_data_dir; se não existir, tenta copiar do pacote."""
+    user_cards = data_path(CARDS_JSON_NAME)
+    if os.path.exists(user_cards):
         try:
-            with open(token_file_path, 'r') as token_file:
-                token = token_file.read()
-                Logger.info("JWT recuperado.")
-                return token
+            with open(user_cards, "r", encoding="utf-8") as f:
+                return json.load(f)
         except Exception as e:
-            Logger.error(f"Erro ao ler token: {str(e)}")
-            return ""
-    else:
-        Logger.info("Nenhum token encontrado.")
-        return ""
+            Logger.exception(f"Erro lendo {user_cards}: {e}")
 
-def delete_access_token():
-    app_storage_dir = storagepath.get_home_dir()
-    token_file_path = os.path.join(app_storage_dir, JWT_FILE)
-    if os.path.exists(token_file_path):
-        os.remove(token_file_path)
-        print("Token deletado.")
-    else:
-        print("Nenhum token para deletar.")
-
-def is_token_valid(token):
+    # tenta carregar o default embutido no app
     try:
-        decoded_token = jwt.decode(token, options={"verify_signature": False})
-        exp_timestamp = decoded_token.get('exp')
-        if exp_timestamp:
-            exp_date = datetime.fromtimestamp(exp_timestamp)
-            if exp_date > datetime.now():
-                return True
-        return False
-    except Exception as e:
-        print(f"Erro ao verificar token: {str(e)}")
-        return False
-
-### JSON
-
-def ler_arquivo_json(caminho_arquivo):
-    try:
-        with open(caminho_arquivo, "r", encoding="utf-8") as arquivo:
-            dados = json.load(arquivo)
-        print("JSON carregado com sucesso!")
-        return dados
-    except FileNotFoundError:
-        print(f"Erro: O arquivo '{caminho_arquivo}' não foi encontrado.")
-    except json.JSONDecodeError as e:
-        print(f"Erro ao decodificar o JSON: {e}")
-    return None
-
-def salvar_arquivo_json(data, caminho_arquivo):
-    try:
-        with open(caminho_arquivo, "w", encoding="utf-8") as file:
-            json.dump(data, file, ensure_ascii=False, indent=4)
-    except Exception as e:
-        print(f"Erro ao salvar JSON: {e}")
-
-def salvar_cards(dict):
-    dict_completo = {
-        "nome": "Overview - Cards",
-        "atualizado_em": str(datetime.now()),
-        "cartoes": dict
-    }
-    salvar_arquivo_json(data=dict_completo, caminho_arquivo='data/cards.json')
-
-dados_cards = ler_arquivo_json(caminho_arquivo='data/cards.json')
-
-### API
-API_PRFX = "https://oceanstream-8b3329b99e40.herokuapp.com/"
-
-def verifica_formato_data(data):
-    """Verifica se a data está no formato YYYY-MM-DD."""
-    try:
-        datetime.strptime(data, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
-
-# POST /dados
-def api_dados(nome_tabela, start_date, end_date):
-    # Verifica o formato das datas
-    if not (verifica_formato_data(start_date) and verifica_formato_data(end_date)):
-        return
-
-    # Adiciona o horário ao final da data final
-    end_date = f"{end_date} 23:59:59"
-
-    # Corpo da requisição
-    corpo = {
-        "tabela": nome_tabela,
-        "dt_inicial": start_date,
-        "dt_final": end_date
-    }
-
-    # Cabeçalhos da requisição
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {get_access_token()}"
-    }
-
-    # URL da API
-    url = API_PRFX+"dados"
-
-    # Faz a requisição POST
-    try:
-        response = requests.post(url, headers=headers, json=corpo)
-
-        # Verifica se a requisição foi bem-sucedida
-        if response.status_code != 200:
-            raise Exception(f"Erro na requisição: {response.status_code} - {response.text}")
-
-        # Converte a resposta para JSON
-        data = response.json()
-
+        with open(CARDS_JSON_BUNDLED, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # salva uma cópia no user_data_dir para edição futura
+        save_cards_json(data)
         return data
-
-    except Exception as error:
-        print(f"Erro: {error}")
-
-# GET /ultimosDados
-def api_ultimosDados():
-    # Cabeçalhos da requisição
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {get_access_token()}"
-    }
-
-    # URL da API
-    url = API_PRFX+"ultimosDados"
-
-    # Faz a requisição POST
-    try:
-        response = requests.get(url, headers=headers)
-
-        # Verifica se a requisição foi bem-sucedida
-        if response.status_code != 200:
-            raise Exception(f"Erro na requisição: {response.status_code} - {response.text}")
-
-        # Converte a resposta para JSON
-        data = response.json()
-
-        return data
-
-    except Exception as error:
-        print(f"Erro: {error}")
-
-# POST /login
-def login(email, senha):
-    url = API_PRFX+'login'
-    headers = {'Content-Type': 'application/json'}
-    corpo = {"email": email, "senha": senha}
-    try:
-        response = requests.post(url, json=corpo, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('accessToken')
-            store_access_token(access_token)
-            return [True, '']
-        else:
-            msg = f"Falha no login: {response.status_code} - {response.text}"
-            print(msg)
     except Exception as e:
-        msg = f"Erro ao tentar fazer login: {str(e)}"
-        print(msg)
-    
-    return [False, msg]
+        Logger.exception(f"Erro lendo default {CARDS_JSON_BUNDLED}: {e}")
+        # fallback mínimo
+        return {"nome": "Overview - Cards", "atualizado_em": str(datetime.now()), "cartoes": []}
 
-### Telas
+def save_cards_json(data):
+    try:
+        with open(data_path(CARDS_JSON_NAME), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        Logger.exception(f"Erro ao salvar {CARDS_JSON_NAME}: {e}")
 
-Builder.load_file('paginas/splash.kv')
-Builder.load_file('paginas/overview.kv')
-Builder.load_file('paginas/alertas.kv')
-Builder.load_file('paginas/login.kv')
-Builder.load_file('paginas/configuracao.kv')
-Builder.load_file('paginas/equipamento.kv')
+# =====================================================================
+#                               UI
+# =====================================================================
+
+class StyledCheckbox(MDCheckbox):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.inactive_color = (1, 1, 1, 1)
+        self.active_color = (0.2, 0.6, 1, 1)
+        self.size = (dp(48), dp(48))
+        self.line_color_normal = (0.8, 0.8, 0.8, 1)
+
+    def animate_checkbox(self, state):
+        anim = Animation(active_color=(0.2, 0.6, 1, 1) if state == "down" else (1, 1, 1, 1), duration=0.2)
+        anim.start(self)
 
 class CardOverview(MDCard):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.tamanho = (dp(80), dp(60))  # ou (width, height) ideal para suas imagens
+        self.tamanho = (dp(80), dp(60))
 
     def add_image_scrollable(self, imagens_dados, target_layout=None):
-        """Adiciona uma linha horizontal scrollável de imagens com labels dentro de um layout específico (FloatLayout ou direto no Card)."""
         altura_total = self.tamanho[1] + dp(60)
-
         scroll = ScrollView(
             size_hint=(1, None),
             height=altura_total,
@@ -336,56 +342,28 @@ class CardOverview(MDCard):
             bar_width=dp(2),
             do_scroll_x=True,
             do_scroll_y=False,
-            pos_hint={"top": 1}
+            pos_hint={"top": 1},
         )
-
         image_row = BoxLayout(
             orientation='horizontal',
             size_hint_x=None,
             height=altura_total,
-                padding=[dp(10), dp(20), dp(40), dp(10)],  # esquerda, cima, direita, baixo
-            spacing=dp(20)
+            padding=[dp(10), dp(20), dp(40), dp(10)],
+            spacing=dp(20),
         )
         image_row.bind(minimum_width=image_row.setter('width'))
 
         for source, top_text, bottom_text in imagens_dados:
-            layout = BoxLayout(
-                orientation='vertical',
-                size_hint=(None, 1),
-                width=self.tamanho[0],
-                spacing=0
-            )
-
-            top_label = Label(
-                text=top_text,
-                size_hint=(1, None),
-                height=dp(25),
-                color=(0, 0, 0, 1)
-            )
-
-            image = Image(
-                source=source,
-                size_hint=(1, None),
-                height=self.tamanho[1],
-                allow_stretch=True,
-                keep_ratio=True
-            )
-
-            bottom_label = Label(
-                text=str(bottom_text),
-                size_hint=(1, None),
-                height=dp(20),
-                color=(0, 0, 0, 1)
-            )
-
+            layout = BoxLayout(orientation='vertical', size_hint=(None, 1), width=self.tamanho[0], spacing=0)
+            top_label = Label(text=top_text, size_hint=(1, None), height=dp(25), color=(0, 0, 0, 1))
+            img = Image(source=source, size_hint=(1, None), height=self.tamanho[1], allow_stretch=True, keep_ratio=True)
+            bottom_label = Label(text=str(bottom_text), size_hint=(1, None), height=dp(20), color=(0, 0, 0, 1))
             layout.add_widget(top_label)
-            layout.add_widget(image)
+            layout.add_widget(img)
             layout.add_widget(bottom_label)
-
             image_row.add_widget(layout)
 
         scroll.add_widget(image_row)
-
         if target_layout:
             target_layout.add_widget(scroll)
         else:
@@ -395,80 +373,43 @@ class CardOverview(MDCard):
 class Overview(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cards = []  # Lista para armazenar os widgets dos cards
-        self.card_configs = dados_cards['cartoes']
+        self.cards = []
+        dados_cards = load_cards_json()
+        self.card_configs = dados_cards.get('cartoes', [])
 
-        self.dicionario_parametros = { # conforme as colunas no banco de dados
-                       'Pitch' : 'PNORS_Pitch',
-                        'Roll' : 'PNORS_Roll',
-                  'Vel. Corr.' : 'vel11',
-                  'Dir. Corr.' : 'dir11',
-                     'Bateria' : 'PNORS_Battery_Voltage',
-                 'Altura Onda' : 'PNORW_Hm0',
-                'Período Onda' : 'PNORW_Tp',
-
-                      'Altura' : 'hm0_alisado',
-                     'Período' : 'tp_alisado',
-
-               'Maré Reduzida' : 'Mare_Reduzida',
-
-                  'Vel. Vento' : 'Velocidade_Vento',
-                      'Rajada' : 'Rajada_Vento',
-                  'Dir. Vento' : 'Direcao_Vento',
-                       'Chuva' : 'Chuva'
+        self.dicionario_parametros = {
+            'Pitch': 'PNORS_Pitch',
+            'Roll': 'PNORS_Roll',
+            'Vel. Corr.': 'vel11',
+            'Dir. Corr.': 'dir11',
+            'Bateria': 'PNORS_Battery_Voltage',
+            'Altura Onda': 'PNORW_Hm0',
+            'Período Onda': 'PNORW_Tp',
+            'Altura': 'hm0_alisado',
+            'Período': 'tp_alisado',
+            'Maré Reduzida': 'Mare_Reduzida',
+            'Vel. Vento': 'Velocidade_Vento',
+            'Rajada': 'Rajada_Vento',
+            'Dir. Vento': 'Direcao_Vento',
+            'Chuva': 'Chuva',
         }
+
+    def _show_api_msg(self, text):
+        self.ids.card_container.clear_widgets()
+        self.ids.card_container.add_widget(MDLabel(text=text, halign="center", theme_text_color="Error"))
+
+    def _clear_api_msg(self):
+        self.ids.card_container.clear_widgets()
 
     def card_maximizado(self, card, config, str_datetime, idx, imagens_dados=None):
         card.clear_widgets()
-
-        layout = BoxLayout(
-            orientation='vertical',
-            spacing=dp(10),
-            padding=[dp(10), dp(10), dp(10), dp(10)],
-            size_hint=(1, None)
-        )
+        layout = BoxLayout(orientation='vertical', spacing=dp(10), padding=[dp(10), dp(10), dp(10), dp(10)], size_hint=(1, None))
         layout.bind(minimum_height=layout.setter("height"))
         card.add_widget(layout)
-
         if imagens_dados:
             card.add_image_scrollable(imagens_dados, target_layout=layout)
-
-        # card.height = layout.height + 20
         card.height = max(dp(180), layout.height + dp(20))
         return card
-
-    def card_minimizado(self, card, config, str_datetime, idx):
-        return self.card_maximizado(card, config, str_datetime, idx)
-        # precisa converter para dp
-        # falta inserir o datetime aqui no card minimizado
-        card.visible = False
-        card.clear_widgets()
-        card.add_widget(
-            Label(
-                text=config["text"],
-                color=(0.5, 0.5, 0.5, 1),
-                height=30, # Define uma altura fixa para o Label
-                size_hint_y=None, # Define que a altura não será ajustada automaticamente
-                pos_hint={"top": 1}, # Alinha o Label no topo do card
-            )
-        )
-        card.add_widget(
-            MDRectangleFlatButton(
-                text="Maximizar",
-                size_hint=(None, None),
-                size=(150, 40),
-                pos_hint={"center_x": 0.5, "center_y": 0.5},
-                on_release=lambda btn, i=idx: self.toggle_card(i),
-            )
-        )
-        card.height = 60
-        return card
-
-    def reorganize_cards(self):
-        card_container = self.ids.card_container
-        card_container.clear_widgets()
-        for card in self.cards:
-            card_container.add_widget(card)
 
     def identifica_e_retorna_dados(self, equipment, ultimosDados):
         if '04' in equipment:
@@ -491,22 +432,38 @@ class Overview(MDScreen):
             return ultimosDados['Maregrafo-TU_Maregrafo_Troll']
 
     def genereate_cards(self):
-        # Mostra feedback de carregamento
         self.ids.card_container.clear_widgets()
-        self.ids.card_container.add_widget(
-            MDLabel(text="Carregando dados...", halign="center", theme_text_color="Hint")
-        )
-        
-        # Inicia o carregamento dos cards em thread separada
+        self.ids.card_container.add_widget(MDLabel(text="Carregando dados...", halign="center", theme_text_color="Hint"))
         Thread(target=self._generate_cards_threaded, daemon=True).start()
-
 
     def _generate_cards_threaded(self):
         app = MDApp.get_running_app()
         selected_parameters = app.selected_parameters
+
         ultimosDados = api_ultimosDados()
-        
-        # Prepara os dados que serão usados na UI
+
+        # --- tratamento de erro da API ---
+        if not ultimosDados:
+            Clock.schedule_once(lambda dt: self._show_api_msg("Sem dados recebidos da API."), 0)
+            return
+
+        if "__auth_error__" in ultimosDados:
+            def _to_login(_dt):
+                try:
+                    delete_access_token()
+                except Exception:
+                    pass
+                MDApp.get_running_app().gerenciador.current = "login"
+            Clock.schedule_once(lambda dt: self._show_api_msg("Sessão expirada. Faça login novamente."), 0)
+            Clock.schedule_once(_to_login, 0.1)
+            return
+
+        if "__error__" in ultimosDados:
+            msg = ultimosDados.get("__error__") or "Erro genérico ao consultar a API."
+            Clock.schedule_once(lambda dt: self._show_api_msg(f"Erro ao carregar dados:\n{msg}"), 0)
+            return
+        # --- fim tratamento de erro ---
+
         cards_data = []
         for idx, config in enumerate(self.card_configs):
             equipment = config.get("text")
@@ -515,26 +472,31 @@ class Overview(MDScreen):
                 continue
 
             dados = self.identifica_e_retorna_dados(equipment=equipment, ultimosDados=ultimosDados)
-            if len(dados) == 2:
-                data_hora = dados[0]['TmStamp']
+            if dados is None:
+                continue
+
+            if isinstance(dados, list):
+                # boia corrente + onda
+                data_hora = dados[0].get('TmStamp', '')[:-5]
                 awac = True
             else:
-                data_hora = dados['TmStamp']
+                data_hora = dados.get('TmStamp', '')[:-5]
                 awac = False
 
-            data_hora = data_hora[:-5]
             imagens_dados = []
-            
             for param in selected_parameters[equipment]:
                 if param in PARAMETROS_IMAGENS:
                     coluna = self.dicionario_parametros[param]
-                    if awac:
-                        if 'PNORW' in coluna:
-                            dado = f"{dados[1][coluna]:.2f}"
+                    try:
+                        if awac:
+                            if 'PNORW' in coluna:
+                                dado = f"{float(dados[1][coluna]):.2f}"
+                            else:
+                                dado = f"{float(dados[0][coluna]):.2f}"
                         else:
-                            dado = f"{dados[0][coluna]:.2f}"
-                    else:
-                        dado = f"{dados[coluna]:.2f}"
+                            dado = f"{float(dados[coluna]):.2f}"
+                    except Exception:
+                        dado = "-"
                     imagens_dados.append((PARAMETROS_IMAGENS[param], param, dado))
 
             cards_data.append({
@@ -545,103 +507,144 @@ class Overview(MDScreen):
                 'idx': idx
             })
 
-        # Agendando a atualização da UI na thread principal
         Clock.schedule_once(lambda dt: self._update_ui(cards_data))
 
     def _update_ui(self, cards_data):
-        self.cards_data = cards_data      # Armazena os dados para uso em partes
-        self.cards_index = 0              # Índice de controle de qual card está sendo adicionado
-        self.cards.clear()                # Limpa lista de cards
-        self.ids.card_container.clear_widgets()
-
-        # Mostra mensagem de carregamento inicial
-        self.ids.card_container.add_widget(
-            MDLabel(text="Carregando dados...", halign="center", theme_text_color="Hint")
-        )
-
-        # Começa a inserção progressiva
+        self.cards_data = cards_data
+        self.cards_index = 0
+        self.cards.clear()
+        self._clear_api_msg()
         Clock.schedule_once(self._add_next_card)
 
     def _add_next_card(self, dt=None):
-        if self.cards_index == 0:
-            self.ids.card_container.clear_widgets()  # Limpa o "Carregando dados..."
-
         if self.cards_index < len(self.cards_data):
             card_info = self.cards_data[self.cards_index]
 
-            # Cria o header do card
-            header_card = MDCard(
-                size_hint=(1, None),
-                height=dp(40),
-                md_bg_color=(0.9, 0.9, 0.95, 1),
-                padding=[dp(10), dp(5), dp(10), dp(5)],
-                radius=[dp(12), dp(12), dp(12), dp(12)],
-                elevation=1,
-            )
-            header_label = Label(
-                text=f"{card_info['equipment']} - último dado: {card_info['data_hora']}",
-                color=(0, 0, 0, 1),
-                halign="left",
-                valign="middle"
-            )
+            header_card = MDCard(size_hint=(1, None), height=dp(40),
+                                 md_bg_color=(0.9, 0.9, 0.95, 1),
+                                 padding=[dp(10), dp(5), dp(10), dp(5)],
+                                 radius=[dp(12)] , elevation=1)
+            header_label = Label(text=f"{card_info['equipment']} - último dado: {card_info['data_hora']}",
+                                 color=(0, 0, 0, 1), halign="left", valign="middle")
             header_card.add_widget(header_label)
             self.ids.card_container.add_widget(header_card)
 
-            # Cria o card principal
             new_card = CardOverview()
-            if card_info['config'].get("maximize", True):
-                self.card_maximizado(
-                    card=new_card,
-                    config=card_info['config'],
-                    str_datetime=card_info['data_hora'],
-                    idx=card_info['idx'],
-                    imagens_dados=card_info['imagens_dados']
-                )
-            else:
-                self.card_minimizado(
-                    card=new_card,
-                    config=card_info['config'],
-                    str_datetime='',
-                    idx=card_info['idx']
-                )
-
+            self.card_maximizado(new_card, card_info['config'], card_info['data_hora'], card_info['idx'], imagens_dados=card_info['imagens_dados'])
             self.cards.append(new_card)
             self.ids.card_container.add_widget(new_card)
 
             self.cards_index += 1
-            Clock.schedule_once(self._add_next_card, 0.02)  # 20ms entre cada card
+            Clock.schedule_once(self._add_next_card, 0.02)
         else:
-            # Adiciona espaçamento final
             self.ids.card_container.add_widget(Widget(size_hint_y=None, height=65))
-            salvar_cards(self.card_configs)
-            print(f'card_config: {self.card_configs}')
-
-
+            save_cards_json({"nome": "Overview - Cards", "atualizado_em": str(datetime.now()), "cartoes": self.card_configs})
 
     def on_enter(self):
-        self.genereate_cards()  
+        self.genereate_cards()
 
 class Alertas(MDScreen):
     pass
 
+# =========================== Equipamento (gráfico/tabela + gaveta) ===========================
+
 class Equipamento(MDScreen):
     equip = None
-    data = ListProperty([])
+    data = []
     cor_label = (0, 0, 0, 1)
-    is_landscape = False  # Estado atual da orientação
-    canvas_widget = None  # Armazena o widget do gráfico para remoção correta
+    is_landscape = False
+    canvas_widget = None
+    TIPOS_EQUIPAMENTO = {'_corrente', '_onda', 'Ondografo', 'Estacao', 'Maregrafo'}
 
-    TIPOS_EQUIPAMENTO = { '_corrente', '_onda', 'Ondografo', 'Estacao', 'Maregrafo' }
+    # estado da gaveta
+    _drawer_open = False
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        Window.bind(on_resize=self.detect_orientation)  # Monitora mudanças na tela
+        Window.bind(on_resize=self._on_window_resize)
         self.build_ui()
 
+    # ---------- Drawer (menu sanduíche) ----------
+    def _on_window_resize(self, *_):
+        """Mantém a gaveta colada na borda direita ao girar/alterar tamanho."""
+        drawer = self.ids.get('right_drawer')
+        if drawer:
+            if self._drawer_open:
+                drawer.x = self.width - drawer.width
+            else:
+                drawer.x = self.width
+        # também recalcula orientação
+        self.detect_orientation(None, *Window.size)
+
+    def open_equipment_drawer(self):
+        """Abre a gaveta lateral direita."""
+        scrim = self.ids.get('drawer_scrim')
+        drawer = self.ids.get('right_drawer')
+        if not scrim or not drawer:
+            Logger.warning("Equipamento: ids 'drawer_scrim'/'right_drawer' não encontrados.")
+            return
+
+        scrim.disabled = False
+        Animation(opacity=0.4, d=0.2).start(scrim)
+
+        target_x = self.width - drawer.width
+        Animation(x=target_x, d=0.25, t="out_cubic").start(drawer)
+        self._drawer_open = True
+
+    def close_equipment_drawer(self):
+        """Fecha a gaveta lateral direita."""
+        scrim = self.ids.get('drawer_scrim')
+        drawer = self.ids.get('right_drawer')
+        if not scrim or not drawer:
+            Logger.warning("Equipamento: ids 'drawer_scrim'/'right_drawer' não encontrados.")
+            return
+
+        def _disable_scrim(*_):
+            scrim.disabled = True
+
+        anim_scrim = Animation(opacity=0.0, d=0.2)
+        anim_scrim.bind(on_complete=lambda *_: _disable_scrim())
+        anim_scrim.start(scrim)
+
+        Animation(x=self.width, d=0.25, t="out_cubic").start(drawer)
+        self._drawer_open = False
+
+    def _populate_equipment_drawer(self):
+        """Cria a lista de botões de equipamentos dentro da gaveta."""
+        cont = self.ids.get('drawer_list')
+        if not cont:
+            Logger.warning("Equipamento: id 'drawer_list' não encontrado.")
+            return
+
+        cont.clear_widgets()
+        equipamentos = [
+            "Boia 04 - Corrente", "Boia 08 - Corrente", "Boia 10 - Corrente",
+            "Boia 04 - Onda", "Boia 08 - Onda", "Boia 10 - Onda",
+            "Ondógrafo Píer-II", "Ondógrafo TGL", "Ondógrafo TPD",
+            "Ondógrafo TPM", "Marégrafo", "Estação Meteorológica"
+        ]
+
+        for nome in equipamentos:
+            btn = MDFlatButton(
+                text=nome,
+                size_hint=(1, None),
+                height=dp(44),
+                theme_text_color="Custom",
+                text_color=(1, 1, 1, 1),
+                md_bg_color=(0, 0, 0, 0),
+                ripple_color=(1, 1, 1, 0.15),
+                on_release=lambda inst, x=nome: self._choose_equipment_from_drawer(x)
+            )
+            cont.add_widget(btn)
+
+    def _choose_equipment_from_drawer(self, text):
+        self.close_equipment_drawer()
+        Clock.schedule_once(lambda *_: self.set_equipamento(text), 0.05)
+
+    # ---------- Fluxo de seleção / dados ----------
     def equip_selected(self, text):
         if text == "Selecione um equipamento":
             return
-
         if text in EQUIPAMENTOS_TABELAS:
             self.equip = EQUIPAMENTOS_TABELAS[text]
             self.ids.titulo.text = text
@@ -654,101 +657,81 @@ class Equipamento(MDScreen):
             if self.is_landscape:
                 self.plot_graph()
 
+    def set_equipamento(self, text):
+        """Chame ao escolher no drawer."""
+        self.ids.titulo.text = text
+        self.equip_selected(text)
+
+    # ---------- UI / Orientação ----------
     def detect_orientation(self, instance, width, height):
-        """Detecta a orientação da tela e atualiza a interface."""
-        if platform == 'android':
-            from jnius import autoclass
-            Context = autoclass('android.content.Context')
-            WindowManager = autoclass('android.view.WindowManager')
-            context = autoclass('org.kivy.android.PythonActivity').mActivity
-            window_manager = context.getSystemService(Context.WINDOW_SERVICE)
-            display = window_manager.getDefaultDisplay()
-            rotation = display.getRotation()
-
-            # 0 ou 2 é portrait, 1 ou 3 é landscape
-            landscape = rotation % 2 == 1
-        else:
-            landscape = width > height
-
+        landscape = width > height
         if landscape != self.is_landscape:
             self.is_landscape = landscape
             self.update_view()
 
-    def update_view(self):
-        """Alterna entre tabela e gráfico dependendo da orientação da tela."""
-        layout = self.ids.container
+    def toggle_header_visibility(self, visible: bool):
+        """Mostra/oculta a barra de filtros (datas) e o cabeçalho da tabela."""
+        box_dt = self.ids.get('box_dt')
+        header_table = self.ids.get('header_table')
 
-        # Remove todos os widgets do container (gráfico ou tabela)
+        if box_dt:
+            box_dt.height = dp(50) if visible else 0
+            box_dt.opacity = 1 if visible else 0
+            box_dt.disabled = not visible
+
+        if header_table:
+            header_table.height = dp(40) if visible else 0
+            header_table.opacity = 1 if visible else 0
+            header_table.disabled = not visible
+
+    def update_view(self):
+        layout = self.ids.container
         if self.canvas_widget:
             layout.remove_widget(self.canvas_widget)
             self.canvas_widget = None
 
-        # Remove a tabela (reconstrói do zero depois, se necessário)
-        self.rebuild_table(clear_only=True)
-
+        # rebuild_table(clear_only=True) quando for esconder tabela no landscape
+        self.rebuild_table(clear_only=self.is_landscape)
         if self.is_landscape:
-            self.toggle_header_visibility(False)  # Esconde cabeçalho e filtros
-            if self.data:  # Só plota se já tiver dados
+            self.toggle_header_visibility(False)
+            if self.data:
                 self.plot_graph()
         else:
-            self.toggle_header_visibility(True)   # Mostra tudo
+            self.toggle_header_visibility(True)
             self.rebuild_table()
 
     def rebuild_table(self, clear_only=False):
-        """Reconstrói a tabela ou apenas limpa, se necessário."""
         table_h = self.ids.header_table
         table = self.ids.data_table
-
         table.clear_widgets()
         table_h.clear_widgets()
-
         if clear_only:
             return
-
         self.build_ui()
         self.update_table()
 
     def build_ui(self):
-        """ Adiciona os elementos da UI para a seleção de datas com calendário """
         layout = self.ids.box_dt
-        layout.clear_widgets()  # EVITAR DUPLICAÇÃO
+        layout.clear_widgets()
 
-        # Dia de hoje
-        hoje = datetime.now()
-        hoje_formatado = hoje.strftime("%Y-%m-%d")  # Formato YYYY-MM-DD
-
-        # Dia de ontem
-        # ontem = hoje - timedelta(days=1)
-        # ontem_formatado = ontem.strftime("%Y-%m-%d")  # Formato YYYY-MM-DD
-
-        # data inicial
-        self.start_date_btn = MDRaisedButton(
-            text=hoje_formatado,
-            on_release=self.show_start_date_picker)
-        # data final
-        self.end_date_btn = MDRaisedButton(
-            text=hoje_formatado,
-            on_release=self.show_end_date_picker)
-        # botao submit
-        generate_button = MDRaisedButton(
-            text="Gerar Dados",
-            on_release=self.validate_dates)
+        hoje = datetime.now().strftime("%Y-%m-%d")
+        self.start_date_btn = MDRaisedButton(text=hoje, on_release=self.show_start_date_picker)
+        self.end_date_btn = MDRaisedButton(text=hoje, on_release=self.show_end_date_picker)
+        generate_button = MDRaisedButton(text="Gerar Dados", on_release=self.validate_dates)
 
         layout.add_widget(self.start_date_btn)
         layout.add_widget(self.end_date_btn)
         layout.add_widget(generate_button)
 
     def show_start_date_picker(self, instance):
-        """ Abre o seletor de data para a data de início """
         date_dialog = MDDatePicker()
         date_dialog.bind(on_save=self.set_start_date)
         date_dialog.open()
 
     def set_start_date(self, instance, value, date_range):
         self.start_date_btn.text = value.strftime("%Y-%m-%d")
-    
+
     def show_end_date_picker(self, instance):
-        """ Abre o seletor de data para a data de fim """
         date_dialog = MDDatePicker()
         date_dialog.bind(on_save=self.set_end_date)
         date_dialog.open()
@@ -756,86 +739,67 @@ class Equipamento(MDScreen):
     def set_end_date(self, instance, value, date_range):
         self.end_date_btn.text = value.strftime("%Y-%m-%d")
 
+    # ---------- API / Tabela ----------
     def req_api(self, start_date, end_date, equip=None):
-        # esvazia lista de dados
         self.data = []
-        
-        # Usa o equipamento passado como parâmetro ou o atual
         equipamento = equip if equip else self.equip
-        
-        # Obtém os dados da API
         dados = api_dados(equipamento, start_date, end_date)
-        
-        # Processa os dados conforme o tipo de equipamento
+
+        if not dados:
+            return
+        if "__auth_error__" in dados:
+            delete_access_token()
+            MDApp.get_running_app().gerenciador.current = "login"
+            return
+        if "__error__" in dados:
+            Logger.error(f"Equipamento: erro API {dados['__error__']}")
+            return
+
         for e in self.TIPOS_EQUIPAMENTO:
             if e in equipamento:
                 colunas = CABECALHO_TABELA[e]
                 for d in dados:
-                    self.data.append([ d[c[0]] for c in colunas ])
+                    self.data.append([d.get(c[0], "") for c in colunas])
 
         self.data.reverse()
         self.update_table()
 
     def update_table(self):
-        """ Atualiza a tabela com os dados """
         table_h = self.ids.header_table
         table = self.ids.data_table
-
         table_h.clear_widgets()
         table.clear_widgets()
 
-        tam_col_1 = dp(60)
+        tam_col_1 = dp(120)
 
-        # Adiciona o cabeçalho
         for e in self.TIPOS_EQUIPAMENTO:
-            if e in self.equip:
+            if self.equip and e in self.equip:
                 colunas = CABECALHO_TABELA[e]
                 table.cols = len(colunas)
                 table_h.cols = len(colunas)
-                
-                # Define largura mínima das colunas (primeira coluna maior)
-                table_h.cols_minimum = {0: tam_col_1}  # Timestamp mais largo
-                table.cols_minimum = {0: tam_col_1}    # Timestamp mais largo
-                
-                for i, coluna in enumerate(colunas):
-                    # Primeira coluna com alinhamento à esquerda e tamanho maior
-                    # halign = 'left' if i == 0 else 'center'
-                    label = Label(
-                        text=coluna[1], 
-                        bold=True, 
-                        color=self.cor_label,
-                        font_size=dp(17),
-                        # halign=halign
-                    )
-                    if i == 0:  # Só para a primeira coluna
-                        label.text_size = (tam_col_1, None)  # Largura fixa para a primeira coluna
-                        # label.shorten = True  # Encurta texto longo com "..."
-                    table_h.add_widget(label)
+                table_h.cols_minimum = {0: tam_col_1}
+                table.cols_minimum = {0: tam_col_1}
 
-        # Função para tratar valores inválidos
+                for i, coluna in enumerate(colunas):
+                    # Use markup para "negrito" em Label padrão
+                    lbl = Label(text=f"[b]{coluna[1]}[/b]", markup=True, color=self.cor_label, font_size=dp(10.5))
+                    if i == 0:
+                        lbl.text_size = (tam_col_1, None)
+                    table_h.add_widget(lbl)
+
         def format_cell_value(value):
-            if value is None:
+            if value is None or value == "":
                 return "-"
             return str(value)
 
-        # Adiciona os dados com tratamento
         for row in self.data:
             for i, cell in enumerate(row):
-                # Primeira coluna com alinhamento à esquerda
-                # halign = 'left' if i == 0 else 'center'
-                label = Label(
-                    text=format_cell_value(cell),
-                    color=self.cor_label,
-                    font_size=dp(16),
-                    # halign=halign
-                )
-                if i == 0:  # Só para a primeira coluna
-                    label.text_size = (tam_col_1, None)  # Largura fixa para a primeira coluna
-                    # label.shorten = True  # Encurta texto longo com "..."
-                table.add_widget(label)
-    
+                lbl = Label(text=format_cell_value(cell), color=self.cor_label, font_size=dp(16))
+                if i == 0:
+                    lbl.text_size = (tam_col_1, None)
+                table.add_widget(lbl)
+
     def validate_dates(self, instance):
-        """ Valida o intervalo de datas selecionado pelo usuário e atualiza os dados """
         start_date = self.start_date_btn.text
         end_date = self.end_date_btn.text
         try:
@@ -846,390 +810,393 @@ class Equipamento(MDScreen):
             else:
                 self.req_api(start_date, end_date)
         except ValueError:
-            self.start_date_btn.text = "Selecionar Data Início"
-            self.end_date_btn.text = "Selecionar Data Fim"
+            self.start_date_btn.text = "YYYY-MM-DD"
+            self.end_date_btn.text = "YYYY-MM-DD"
 
+    # ---------- Gráfico ----------
     def plot_graph(self):
-        """Gera um gráfico com os dados do equipamento selecionado"""
         if not self.data:
             return
 
-        import matplotlib.dates as mdates
-        from matplotlib.backend_bases import MouseEvent
-        from matplotlib.widgets import Cursor
-        from datetime import datetime
+        if IS_IOS:
+            # usa kivy_garden.graph no iOS
+            try:
+                from kivy_garden.graph import Graph, MeshLinePlot
+                xs = []
+                ys1, ys2 = [], []
 
-        # Limpa o gráfico anterior se existir
-        plt.close('all')
+                if '_corrente' in self.equip:
+                    for row in self.data:
+                        xs.append(row[0])
+                        # índices conforme CABECALHO_TABELA['_corrente']
+                        # [TmStamp, Pitch, Roll, vel11, dir11, Bateria]
+                        ys1.append(float(row[3]) if row[3] not in (None, "", "-") else 0.0)  # vel
+                        ys2.append(float(row[4]) if row[4] not in (None, "", "-") else 0.0)  # dir
+                elif '_onda' in self.equip or 'Ondografo' in self.equip:
+                    for row in self.data:
+                        xs.append(row[0])
+                        ys1.append(float(row[1]) if row[1] not in (None, "", "-") else 0.0)  # altura
+                        ys2.append(float(row[2]) if row[2] not in (None, "", "-") else 0.0)  # período
+                elif 'Estacao' in self.equip:
+                    for row in self.data:
+                        xs.append(row[0])
+                        ys1.append(float(row[1]) if row[1] not in (None, "", "-") else 0.0)  # vento
+                        ys2.append(float(row[2]) if row[2] not in (None, "", "-") else 0.0)  # rajada
+                elif 'Maregrafo' in self.equip:
+                    for row in self.data:
+                        xs.append(row[0])
+                        ys1.append(float(row[1]) if row[1] not in (None, "", "-") else 0.0)
 
-        timestamps = [datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S") for row in self.data]
+                if not ys1 and not ys2:
+                    return
 
-        # Configurações diferentes para cada tipo de equipamento
-        if '_corrente' in self.equip:
-            # Gráfico para ADCP Corrente
-            velocidades = [float(row[1]) for row in self.data]
-            direcoes = [float(row[2]) for row in self.data]
-            
+                y_values = ys1 + ys2 if ys2 else ys1
+                ymin = min(y_values) if y_values else 0
+                ymax = max(y_values) if y_values else 1
+                if ymin == ymax:
+                    ymax = ymin + 1
+
+                g = Graph(
+                    xlabel='tempo', ylabel='valor',
+                    x_ticks_minor=0, x_ticks_major=max(1, len(xs) // 6),
+                    y_ticks_major=max(1, int((ymax - ymin) // 5) or 1),
+                    y_grid=True, x_grid=True,
+                    xmin=0, xmax=max(1, len(xs) - 1),
+                    ymin=ymin, ymax=ymax,
+                    size_hint=(1, 1)
+                )
+
+                plot1 = MeshLinePlot()
+                plot1.points = [(i, ys1[i]) for i in range(len(ys1))]
+                g.add_plot(plot1)
+
+                if ys2:
+                    plot2 = MeshLinePlot()
+                    plot2.points = [(i, ys2[i]) for i in range(len(ys2))]
+                    g.add_plot(plot2)
+
+                self.canvas_widget = g
+                self.canvas_widget.size_hint_y = 1
+                self.canvas_widget.pos_hint = {"center_x": 0.5, "center_y": 0.5}
+                self.ids.container.add_widget(self.canvas_widget)
+            except Exception as e:
+                Logger.exception(f"Graph iOS erro: {e}")
+        else:
+            # desktop: matplotlib
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+            from kivy_garden.matplotlib import FigureCanvasKivyAgg
+            from datetime import datetime as dt
+
+            plt.close('all')
+            timestamps = [dt.strptime(row[0], "%Y-%m-%d %H:%M:%S") for row in self.data]
+
             fig, ax = plt.subplots(figsize=(10, 4))
-            line1, = ax.plot(timestamps, velocidades, marker="o", linestyle="-", color="blue", label="Velocidade (m/s)")
-            line2, = ax.plot(timestamps, direcoes, marker="s", linestyle="--", color="red", label="Direção (°)")
-            
-            ax.set_title("Velocidade e Direção da Corrente")
-            ax.set_ylabel("Valor")
-            
-        elif '_onda' in self.equip:
-            # Gráfico para ADCP Onda
-            altura = [float(row[1]) for row in self.data]
-            periodo = [float(row[2]) for row in self.data]
-            
-            fig, ax = plt.subplots(figsize=(10, 4))
-            line1, = ax.plot(timestamps, altura, marker="o", linestyle="-", color="blue", label="Altura (m)")
-            line2, = ax.plot(timestamps, periodo, marker="s", linestyle="--", color="green", label="Período (s)")
-            
-            ax.set_title("Altura e Período de Onda")
-            ax.set_ylabel("Valor")
-            
-        elif 'Ondografo' in self.equip:
-            # Gráfico para Ondógrafo
-            altura = [float(row[1]) for row in self.data]
-            periodo = [float(row[2]) for row in self.data]
-            
-            fig, ax = plt.subplots(figsize=(10, 4))
-            line1, = ax.plot(timestamps, altura, marker="o", linestyle="-", color="blue", label="Altura (m)")
-            line2, = ax.plot(timestamps, periodo, marker="s", linestyle="--", color="green", label="Período (s)")
-            
-            ax.set_title("Altura e Período de Onda")
-            ax.set_ylabel("Valor")
-            
-        elif 'Estacao' in self.equip:
-            # Gráfico para Estação Meteorológica
-            vento = [float(row[1]) for row in self.data]
-            rajada = [float(row[2]) for row in self.data]
-            
-            fig, ax = plt.subplots(figsize=(10, 4))
-            line1, = ax.plot(timestamps, vento, marker="o", linestyle="-", color="blue", label="Vel. Vento (m/s)")
-            line2, = ax.plot(timestamps, rajada, marker="s", linestyle="--", color="red", label="Rajada (m/s)")
-            
-            ax.set_title("Velocidade do Vento e Rajadas")
-            ax.set_ylabel("Velocidade (m/s)")
-            
-        elif 'Maregrafo' in self.equip:
-            # Gráfico para Marégrafo
-            mare = [float(row[1]) for row in self.data]
-            
-            fig, ax = plt.subplots(figsize=(10, 4))
-            line1, = ax.plot(timestamps, mare, marker="o", linestyle="-", color="blue", label="Maré Reduzida (m)")
-            
-            ax.set_title("Nível do Mar")
-            ax.set_ylabel("Altura (m)")
+            if '_corrente' in self.equip:
+                velocidades = [float(row[3]) for row in self.data]
+                direcoes = [float(row[4]) for row in self.data]
+                ax.plot(timestamps, velocidades, marker="o", linestyle="-", label="Velocidade (m/s)")
+                ax.plot(timestamps, direcoes, marker="s", linestyle="--", label="Direção (°)")
+                ax.set_title("Velocidade e Direção da Corrente")
+            elif '_onda' in self.equip or 'Ondografo' in self.equip:
+                altura = [float(row[1]) for row in self.data]
+                periodo = [float(row[2]) for row in self.data]
+                ax.plot(timestamps, altura, marker="o", linestyle="-", label="Altura (m)")
+                ax.plot(timestamps, periodo, marker="s", linestyle="--", label="Período (s)")
+                ax.set_title("Altura e Período de Onda")
+            elif 'Estacao' in self.equip:
+                vento = [float(row[1]) for row in self.data]
+                rajada = [float(row[2]) for row in self.data]
+                ax.plot(timestamps, vento, marker="o", linestyle="-", label="Vel. Vento (m/s)")
+                ax.plot(timestamps, rajada, marker="s", linestyle="--", label="Rajada (m/s)")
+                ax.set_title("Velocidade do Vento e Rajadas")
+            elif 'Maregrafo' in self.equip:
+                mare = [float(row[1]) for row in self.data]
+                ax.plot(timestamps, mare, marker="o", linestyle="-", label="Maré Reduzida (m)")
+                ax.set_title("Nível do Mar")
 
-        # Configurações comuns a todos os gráficos
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-        fig.autofmt_xdate()
-        ax.set_xlabel("Tempo")
-        ax.legend()
-        ax.grid(True)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+            fig.autofmt_xdate()
+            ax.set_xlabel("Tempo")
+            ax.legend()
+            ax.grid(True)
 
-        # Cursor interativo
-        cursor = Cursor(ax, useblit=True, color='black', linewidth=1)
+            self.canvas_widget = FigureCanvasKivyAgg(fig)
+            self.canvas_widget.size_hint_y = 1
+            self.canvas_widget.pos_hint = {"center_x": 0.5, "center_y": 0.5}
+            self.ids.container.add_widget(self.canvas_widget)
 
-        # Interatividade com texto ao tocar
-        annot = ax.annotate("", xy=(0,0), xytext=(20,20), textcoords="offset points",
-                            bbox=dict(boxstyle="round", fc="w"), arrowprops=dict(arrowstyle="->"))
-        annot.set_visible(False)
-
-        def update_annot(ind, line):
-            x, y = line.get_data()
-            annot.xy = (x[ind[0]], y[ind[0]])
-            text = f"{x[ind[0]].strftime('%H:%M')}: {y[ind[0]]:.2f}"
-            annot.set_text(text)
-            annot.get_bbox_patch().set_facecolor('lightyellow')
-            annot.get_bbox_patch().set_alpha(0.8)
-
-        def hover(event):
-            vis = annot.get_visible()
-            if event.inaxes == ax:
-                for line in [line1, line2] if 'line2' in locals() else [line1]:
-                    cont, ind = line.contains(event)
-                    if cont:
-                        update_annot(ind["ind"], line)
-                        annot.set_visible(True)
-                        fig.canvas.draw_idle()
-                        return
-            if vis:
-                annot.set_visible(False)
-                fig.canvas.draw_idle()
-
-        fig.canvas.mpl_connect("motion_notify_event", hover)
-
-        if self.canvas_widget:
-            self.ids.container.remove_widget(self.canvas_widget)
-
-        self.canvas_widget = FigureCanvasKivyAgg(fig)
-        self.canvas_widget.size_hint_y = 1
-        self.canvas_widget.pos_hint = {"center_x": 0.5, "center_y": 0.5}
-
-        self.ids.container.add_widget(self.canvas_widget)
-   
-    def toggle_header_visibility(self, visible):
-        header = self.ids.get("titulo", None)
-        if header:
-            header.opacity = 1 if visible else 0
-            header.disabled = not visible
-
-        box_dt = self.ids.box_dt
-        header_table = self.ids.header_table
-
-        box_dt.height = dp(50) if visible else 0
-        header_table.height = dp(40) if visible else 0
-
-        box_dt.opacity = 1 if visible else 0
-        box_dt.disabled = not visible
-        header_table.opacity = 1 if visible else 0
-        header_table.disabled = not visible
-
-    def build_menu(self):
-        equipamentos = [
-            "Boia 04 - Corrente", "Boia 08 - Corrente", "Boia 10 - Corrente",
-            "Boia 04 - Onda", "Boia 08 - Onda", "Boia 10 - Onda",
-            "Ondógrafo Píer-II", "Ondógrafo TGL", "Ondógrafo TPD",
-            "Ondógrafo TPM", "Marégrafo", "Estação Meteorológica"
-        ]
-        self.menu_items = [
-            {
-                "text": equipamento,
-                "height": dp(48),
-                "text_color": (0, 0, 0, 1),
-                "on_release": lambda x=equipamento: self.set_equipamento(x)
-            } for equipamento in equipamentos
-        ]
-
-        self.menu = MDDropdownMenu(
-            caller=self.ids.titulo_container,
-            items=self.menu_items,
-            width_mult=4,
-            max_height=dp(240),
-        )
-
-    def open_equip_menu(self):
-        if self.menu:
-            self.menu.open()
-            self.animate_arrow(up=True)
-
-    def set_equipamento(self, text):
-        self.ids.titulo.text = text  # ← Isso troca o texto visualmente
-        self.animate_arrow(up=False)  # ← Isso gira a seta de volta para baixo
-        self.menu.dismiss()
-        self.equip_selected(text)
-
-    def animate_arrow(self, up):
-        icon = self.ids.titulo_dropdown_icon
-        anim = Animation(rotation=180 if up else 0, duration=0.2)
-        anim.start(icon)    
-
+    # ---------- KV lifecycle ----------
     def on_kv_post(self, base_widget):
         super().on_kv_post(base_widget)
-        self.build_menu()
+        # prepara gaveta
+        self._populate_equipment_drawer()
+        drawer = self.ids.get('right_drawer')
+        scrim = self.ids.get('drawer_scrim')
+        if drawer:
+            drawer.x = self.width  # começa fora da tela
+        if scrim:
+            scrim.opacity = 0
+            scrim.disabled = True
+
+# ============================== Login Screen ==============================
 
 class TelaLogin(MDScreen):
-    email = ObjectProperty(None)
-    senha = ObjectProperty(None)
+    email = None
+    senha = None
+    _kb_bound = False
+    _last_focus_widget = None
 
-    def on_enter(self):
-        pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._kb_bound = False
+        self._last_focus_widget = None
+
+    def on_kv_post(self, base_widget):
+        Clock.schedule_once(self.verifica_token, 1.90)
+        super().on_kv_post(base_widget)
+        if "root_box" in self.ids:
+            self.ids.root_box.y = 0
+
+        if IS_IOS and not getattr(self, "_kb_bound", False):
+            Window.bind(on_keyboard_height=self._on_keyboard_height)
+            self._kb_bound = True
+
+        # bind foco uma vez
+        for name in ("email", "senha"):
+            w = self.ids.get(name)
+            if w and not getattr(w, "_focus_bound", False):
+                w.bind(focus=self.on_field_focus)
+                w._focus_bound = True
+
+    def on_pre_enter(self):
+        if "root_box" in self.ids:
+            self.ids.root_box.y = 0
+
+    def on_pre_leave(self):
+        if getattr(self, "_kb_bound", False):
+            try:
+                Window.unbind(on_keyboard_height=self._on_keyboard_height)
+            except Exception:
+                pass
+            self._kb_bound = False
+        if "root_box" in self.ids:
+            self.ids.root_box.y = 0
+
+    def on_field_focus(self, widget, focus):
+        if IS_IOS:
+            if focus:
+                self._last_focus_widget = widget
+            else:
+                kb = self._keyboard_pixels(Window, getattr(Window, "keyboard_height", 0))
+                if kb <= 0 and "root_box" in self.ids:
+                    Animation.cancel_all(self.ids.root_box, "y")
+                    self.ids.root_box.y = 0
+
+    def _keyboard_pixels(self, win, height):
+        try:
+            h = float(height or 0)
+        except Exception:
+            h = 0
+        if 0 < h <= 1:
+            h *= win.height
+        return max(0, h)
+
+    def _widget_bottom_to_window(self, widget):
+        if not widget:
+            return None
+        try:
+            _, yw = widget.to_window(widget.x, widget.y)
+            return yw
+        except Exception:
+            return None
+
+    def _on_keyboard_height(self, win, height):
+        if "root_box" not in self.ids:
+            return
+
+        kb_px = self._keyboard_pixels(win, height)
+        if kb_px <= 0:
+            Animation.cancel_all(self.ids.root_box, "y")
+            Animation(y=0, d=0.12, t="out_quad").start(self.ids.root_box)
+            return
+
+        ref = self._last_focus_widget or self.ids.get("email") or self.ids.get("card_login")
+        bottom = self._widget_bottom_to_window(ref)
+        if bottom is None:
+            return
+
+        safety = dp(12)
+        visible_floor = kb_px + safety
+
+        if bottom < visible_floor:
+            delta = visible_floor - bottom
+            target = max(0, delta)
+        else:
+            target = 0
+
+        cur = self.ids.root_box.y
+        if abs(cur - target) > 1:
+            Animation.cancel_all(self.ids.root_box, "y")
+            Animation(y=target, d=0.12, t="out_quad").start(self.ids.root_box)
 
     def submit(self):
-        email = self.ids.email.text
-        senha = self.ids.senha.text
-        
-        # Limpa a mensagem de erro anterior
-        self.ids.error_message.text = ""
-        self.ids.error_message.opacity = 0
-        
-        try:
-            resposta = login(email=email, senha=senha)
-            if resposta[0]:
-                self.manager.current = 'overview'
-            else:
-                self.show_error(resposta[1])
-        except requests.exceptions.Timeout:
-            self.show_error("Timeout: servidor não respondeu")
-        except requests.exceptions.ConnectionError:
-            self.show_error("Sem conexão com o servidor")
-        except Exception as e:
-            self.show_error(f"Erro: {str(e)}")
-        finally:
+        email = self.ids.get("email").text if self.ids.get("email") else ""
+        senha = self.ids.get("senha").text if self.ids.get("senha") else ""
+        ok, msg = login(email, senha)
+        if ok:
+            MDApp.get_running_app().gerenciador.current = 'overview'
+        else:
+            lbl = self.ids.get("error_message")
+            if lbl:
+                lbl.text = msg or "Falha no login."
+                lbl.opacity = 0
+                Animation(opacity=1, d=0.3).start(lbl)
+        if self.ids.get("senha"):
             self.ids.senha.text = ""
 
-    def show_error(self, message):
-        """Exibe a mensagem de erro com animação"""
-        error_label = self.ids.error_message
-        error_label.text = message
-        self.ids.error_message
-        anim = Animation(opacity=1, duration=0.3)
-        anim.start(error_label)
+    def verifica_token(self, *args):
+        app = MDApp.get_running_app()
+        token = get_access_token()
+        if is_token_valid(token):
+            app.gerenciador.current = "overview"
+        else:
+            delete_access_token()
+            app.gerenciador.current = "login"
+
+# ============================ Configuração UI ============================
 
 class Configuracao(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        # apenas no primeiro carregamento precisa consultar os dados do arquivo JSON
-        self.first=True
-
-        self.dicionario_parametros = { # conforme os IDs das checkboxes em 'configuracao.kv'
-                       'Pitch' : 'pitch',
-                        'Roll' : 'roll',
-                  'Vel. Corr.' : 'vel',
-                  'Dir. Corr.' : 'dir',
-                 'Altura Onda' : 'altura',
-                'Período Onda' : 'periodo',
-                      'Altura' : 'altura',
-                     'Período' : 'periodo',
-                     'Bateria' : 'bateria',
-               'Maré Reduzida' : 'mare',
-                  'Vel. Vento' : 'velvento',
-                      'Rajada' : 'rajada',
-                  'Dir. Vento' : 'dirvento',
-                       'Chuva' : 'chuva'
+        self.first = True
+        self.dicionario_parametros = {
+            'Pitch': 'pitch', 'Roll': 'roll',
+            'Vel. Corr.': 'vel', 'Dir. Corr.': 'dir',
+            'Altura Onda': 'altura', 'Período Onda': 'periodo',
+            'Altura': 'altura', 'Período': 'periodo',
+            'Bateria': 'bateria', 'Maré Reduzida': 'mare',
+            'Vel. Vento': 'velvento', 'Rajada': 'rajada',
+            'Dir. Vento': 'dirvento', 'Chuva': 'chuva',
         }
 
     def on_enter(self):
         if self.first:
             self.seleciona_chkbx()
-            self.first=False
+            self.first = False
 
     def identifica_equipamento(self, equip):
         id_base = 'chkbx_'
-        # adcp
         if 'Boia' in equip:
-            if '04' in equip:
-                id_equip = id_base+'b04_'
-            elif '08' in equip:
-                id_equip = id_base+'b08_'
-            elif '10' in equip:
-                id_equip = id_base+'b10_'
-        # maregrafo
+            if '04' in equip: return id_base + 'b04_'
+            if '08' in equip: return id_base + 'b08_'
+            if '10' in equip: return id_base + 'b10_'
         elif 'Marégraf' in equip:
-            id_equip = id_base+'maregrafo_'
-        # estação
+            return id_base + 'maregrafo_'
         elif 'Estação' in equip:
-            id_equip = id_base+'estacao_'
-        # ondografo
+            return id_base + 'estacao_'
         elif 'Ondógrafo' in equip:
-            if 'II' in equip:
-                id_equip = id_base+'pii_'
-            elif 'TGL' in equip:
-                id_equip = id_base+'tgl_'
-            elif 'TPD' in equip:
-                id_equip = id_base+'tpd_'
-            elif 'TPM' in equip:
-                id_equip = id_base+'tpm_'
-        return id_equip
+            if 'II' in equip:  return id_base + 'pii_'
+            if 'TGL' in equip: return id_base + 'tgl_'
+            if 'TPD' in equip: return id_base + 'tpd_'
+            if 'TPM' in equip: return id_base + 'tpm_'
+        return id_base
 
     def seleciona_chkbx(self):
         app = MDApp.get_running_app()
         overview_screen = app.gerenciador.get_screen('overview')
-        
-        # Percorre cada um dos equipamentos selecionados
         for card_config in overview_screen.card_configs:
-            if not card_config['selecionado']:
+            if not card_config.get('selecionado'):
                 continue
-                
             equip = card_config['text']
             id_equip = self.identifica_equipamento(equip)
-
-            # Percorre cada um dos parametros do equipamento atual
             for parametro in card_config['selecionado']:
-                id_parametro = self.dicionario_parametros[parametro]
+                id_parametro = self.dicionario_parametros.get(parametro)
+                if not id_parametro:
+                    continue
                 chkbx_id = f'{id_equip}{id_parametro}'
                 self.alterar_estado_checkbox(chkbx_id, 'down')
 
     def alterar_estado_checkbox(self, checkbox_id, novo_estado):
-        """
-        Altera o estado de uma checkbox específica.
-        :param checkbox_id: O ID da checkbox (string).
-        :param novo_estado: O novo estado ('down' para marcado, 'normal' para desmarcado).
-        """
         if checkbox_id in self.ids:
             checkbox = self.ids[checkbox_id]
             if isinstance(checkbox, StyledCheckbox):
                 checkbox.state = novo_estado
-            else:
-                print(f'O ID {checkbox_id} não é uma StyledCheckbox.')
-        else:
-            print(f'Checkbox com ID {checkbox_id} não encontrada.')
+
+# ============================ Splash / Manager ===========================
 
 class SplashScreen(MDScreen):
     def on_kv_post(self, base_widget):
-        print(">>> SplashScreen carregada")
         Clock.schedule_once(self.start_animation, 0.5)
 
     def start_animation(self, *args):
-        print(">>> Iniciando animações...")
         logo = self.ids.logo
         title = self.ids.title
-
         anim_logo = Animation(opacity=1, y=logo.y + 30, duration=2.4, t="out_quad")
         anim_title = Animation(opacity=1, y=title.y + 30, duration=2.4, t="out_quad")
-
         anim_logo.start(logo)
         anim_title.start(title)
-
-        Clock.schedule_once(self.verifica_token, 5.5)  # <- espera suficiente
+        Clock.schedule_once(self.verifica_token, 5.5)
 
     def verifica_token(self, *args):
-        print(">>> Verificando token")
         app = MDApp.get_running_app()
-
         token = get_access_token()
         if is_token_valid(token):
-            print(">>> Token válido")
             app.gerenciador.current = "overview"
         else:
-            print(">>> Token inválido ou não existe")
             delete_access_token()
             app.gerenciador.current = "login"
-
 
 class GerenciadorTelas(MDScreenManager):
     pass
 
+# ================================ APP ==================================
+
 class OceanStream(MDApp):
+    # Expostos ao KV para lidar com o notch / safe area
+    safe_top = NumericProperty(0)
+    safe_bottom = NumericProperty(0)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.selected_parameters = {}
 
-        # Carrega as configurações do JSON
-        dados_cards = ler_arquivo_json(caminho_arquivo='data/cards.json')
-        if dados_cards:
-            for equip in dados_cards['cartoes']:
-                if equip['selecionado']:
-                    self.selected_parameters[equip['text']] = equip['selecionado'].copy()
+        # Carrega seleção inicial dos cards
+        dados_cards = load_cards_json() or {}
+        for equip in (dados_cards.get('cartoes') or []):
+            if equip.get('selecionado'):
+                self.selected_parameters[equip['text']] = equip['selecionado'][:]
+
+        self.root_layout = None
+        self.gerenciador = None
+        self.navigation_bar = None
 
     def build(self):
-        # Solicitar permissões no Android
-        if platform == 'android':
-            from android.permissions import request_permissions, Permission
-            request_permissions([
-                Permission.INTERNET,
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.WRITE_EXTERNAL_STORAGE
-            ])
-
-        from kivy.core.window import Window
-
-        if platform == 'android':
+        # Comportamento do teclado
+        if IS_IOS:
+            # mantém a tela fixa quando o teclado sobe
+            Window.softinput_mode = ''   # valores válidos: '', 'below_target', 'pan', 'scale', 'resize'
+        elif IS_ANDROID:
             Window.softinput_mode = 'resize'
         else:
             Window.size = (dp(360), dp(640))
 
+        # Carrega os arquivos KV
+        Builder.load_file('paginas/splash.kv')
+        Builder.load_file('paginas/overview.kv')
+        Builder.load_file('paginas/alertas.kv')
+        Builder.load_file('paginas/login.kv')
+        Builder.load_file('paginas/configuracao.kv')
+        Builder.load_file('paginas/equipamento.kv')
 
+        # Monta a hierarquia de telas
         self.root_layout = FloatLayout()
         self.gerenciador = GerenciadorTelas()
 
-        # Adiciona todas as telas
-        self.gerenciador.add_widget(SplashScreen(name='splash'))
+        #self.gerenciador.add_widget(SplashScreen(name='splash'))
         self.gerenciador.add_widget(Overview(name='overview'))
         self.gerenciador.add_widget(Alertas(name='alertas'))
         self.gerenciador.add_widget(TelaLogin(name='login'))
@@ -1240,24 +1207,78 @@ class OceanStream(MDApp):
         self.gerenciador.size_hint = (1, 1)
         self.root_layout.add_widget(self.gerenciador)
 
-        self.navigation_bar = None
-        self.gerenciador.current = 'splash'
-
+        # Inicial
+        self.gerenciador.current = 'login'
         return self.root_layout
 
+    def on_start(self):
+        # Calcula a safe area no início e mantém atualizada em mudanças de tamanho/orientação
+        self._update_safe_area()
+        Window.bind(on_resize=lambda *_: self._update_safe_area())
+
+    # ---------- Safe Area helpers ----------
+    def _has_notch_like_ratio(self):
+        # Heurística: iPhones com notch têm razão de aspecto > ~1.8
+        w, h = Window.size
+        if not w or not h:
+            return True
+        ratio = max(w, h) / float(min(w, h))
+        return ratio > 1.8
+
+    def _update_safe_area(self):
+        if platform == 'ios':
+            portrait = Window.height >= Window.width
+            if portrait:
+                if self._has_notch_like_ratio():
+                    self.safe_top = dp(44)     # status bar + notch
+                    self.safe_bottom = dp(34)  # home indicator
+                else:
+                    self.safe_top = dp(20)     # iPhones sem notch
+                    self.safe_bottom = 0
+            else:
+                # Em landscape, top geralmente 0; reserve um pouco no bottom se tiver notch
+                self.safe_top = 0
+                self.safe_bottom = dp(21) if self._has_notch_like_ratio() else 0
+        else:
+            self.safe_top = 0
+            self.safe_bottom = 0
+    # --------------------------------------
+
+    def on_screen_change(self, instance, screen_name):
+        if screen_name == 'overview':
+            if not self.navigation_bar:
+                self.navigation_bar = NavigationBar(
+                    screen_manager=self.gerenciador,
+                    logout_callback=self.logout
+                )
+                # evita duplicar caso já esteja num parent
+                if self.navigation_bar.parent:
+                    self.root_layout.remove_widget(self.navigation_bar)
+
+                self.navigation_bar.size_hint = (1, None)
+                self.navigation_bar.height = dp(56)
+                self.navigation_bar.pos_hint = {"x": 0, "y": 0}
+                self.root_layout.add_widget(self.navigation_bar)
+        else:
+            if self.navigation_bar:
+                # remove a barra quando sai do overview
+                self.root_layout.clear_widgets()
+                self.root_layout.add_widget(self.gerenciador)
+                self.navigation_bar = None
+
     def toggle_parameter(self, equipment, parameter, state):
-        # Atualiza selected_parameters
+        # Atualiza estrutura em memória
         if equipment not in self.selected_parameters:
             self.selected_parameters[equipment] = []
-        
+
         if state == 'down':
             if parameter not in self.selected_parameters[equipment]:
                 self.selected_parameters[equipment].append(parameter)
         else:
             if parameter in self.selected_parameters[equipment]:
                 self.selected_parameters[equipment].remove(parameter)
-        
-        # Atualiza card_configs na tela Overview
+
+        # Atualiza a configuração persistida (cards.json)
         overview_screen = self.gerenciador.get_screen('overview')
         for card in overview_screen.card_configs:
             if card['text'] == equipment:
@@ -1268,35 +1289,16 @@ class OceanStream(MDApp):
                     if parameter in card['selecionado']:
                         card['selecionado'].remove(parameter)
                 break
-        
-        # Salva as alterações
-        salvar_cards(overview_screen.card_configs)
-        
-        # Atualiza a tela Overview se estiver visível
+
+        save_cards_json({
+            "nome": "Overview - Cards",
+            "atualizado_em": str(datetime.now()),
+            "cartoes": overview_screen.card_configs
+        })
+
+        # Se já está no overview, re-renderiza os cards
         if self.gerenciador.current == "overview":
             self.gerenciador.get_screen("overview").genereate_cards()
-
-    def on_screen_change(self, instance, screen_name):
-        if screen_name == 'overview':
-            if not self.navigation_bar:
-                self.navigation_bar = NavigationBar(
-                    screen_manager=self.gerenciador,
-                    logout_callback=self.logout
-                )
-                # Garante que não adiciona duplicado
-                if self.navigation_bar.parent:
-                    self.root_layout.remove_widget(self.navigation_bar)
-
-                self.navigation_bar.size_hint = (1, None)
-                self.navigation_bar.height = dp(56)
-                self.navigation_bar.pos_hint = {"x": 0, "y": 0}
-                self.root_layout.add_widget(self.navigation_bar)
-
-        else:
-            if self.navigation_bar:
-                self.root_layout.clear_widgets()
-                self.root_layout.add_widget(self.gerenciador)
-                self.navigation_bar = None
 
     def logout(self):
         delete_access_token()
