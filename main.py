@@ -655,7 +655,8 @@ class Equipamento(MDScreen):
             self.update_view()
 
             if self.is_landscape:
-                self.plot_graph()
+                pass
+                #self.plot_graph()
 
     def set_equipamento(self, text):
         """Chame ao escolher no drawer."""
@@ -695,7 +696,8 @@ class Equipamento(MDScreen):
         if self.is_landscape:
             self.toggle_header_visibility(False)
             if self.data:
-                self.plot_graph()
+                pass
+                #self.plot_graph()
         else:
             self.toggle_header_visibility(True)
             self.rebuild_table()
@@ -815,119 +817,7 @@ class Equipamento(MDScreen):
 
     # ---------- Gráfico ----------
     def plot_graph(self):
-        if not self.data:
-            return
-
-        if IS_IOS:
-            # usa kivy_garden.graph no iOS
-            try:
-                from kivy_garden.graph import Graph, MeshLinePlot
-                xs = []
-                ys1, ys2 = [], []
-
-                if '_corrente' in self.equip:
-                    for row in self.data:
-                        xs.append(row[0])
-                        # índices conforme CABECALHO_TABELA['_corrente']
-                        # [TmStamp, Pitch, Roll, vel11, dir11, Bateria]
-                        ys1.append(float(row[3]) if row[3] not in (None, "", "-") else 0.0)  # vel
-                        ys2.append(float(row[4]) if row[4] not in (None, "", "-") else 0.0)  # dir
-                elif '_onda' in self.equip or 'Ondografo' in self.equip:
-                    for row in self.data:
-                        xs.append(row[0])
-                        ys1.append(float(row[1]) if row[1] not in (None, "", "-") else 0.0)  # altura
-                        ys2.append(float(row[2]) if row[2] not in (None, "", "-") else 0.0)  # período
-                elif 'Estacao' in self.equip:
-                    for row in self.data:
-                        xs.append(row[0])
-                        ys1.append(float(row[1]) if row[1] not in (None, "", "-") else 0.0)  # vento
-                        ys2.append(float(row[2]) if row[2] not in (None, "", "-") else 0.0)  # rajada
-                elif 'Maregrafo' in self.equip:
-                    for row in self.data:
-                        xs.append(row[0])
-                        ys1.append(float(row[1]) if row[1] not in (None, "", "-") else 0.0)
-
-                if not ys1 and not ys2:
-                    return
-
-                y_values = ys1 + ys2 if ys2 else ys1
-                ymin = min(y_values) if y_values else 0
-                ymax = max(y_values) if y_values else 1
-                if ymin == ymax:
-                    ymax = ymin + 1
-
-                g = Graph(
-                    xlabel='tempo', ylabel='valor',
-                    x_ticks_minor=0, x_ticks_major=max(1, len(xs) // 6),
-                    y_ticks_major=max(1, int((ymax - ymin) // 5) or 1),
-                    y_grid=True, x_grid=True,
-                    xmin=0, xmax=max(1, len(xs) - 1),
-                    ymin=ymin, ymax=ymax,
-                    size_hint=(1, 1)
-                )
-
-                plot1 = MeshLinePlot()
-                plot1.points = [(i, ys1[i]) for i in range(len(ys1))]
-                g.add_plot(plot1)
-
-                if ys2:
-                    plot2 = MeshLinePlot()
-                    plot2.points = [(i, ys2[i]) for i in range(len(ys2))]
-                    g.add_plot(plot2)
-
-                self.canvas_widget = g
-                self.canvas_widget.size_hint_y = 1
-                self.canvas_widget.pos_hint = {"center_x": 0.5, "center_y": 0.5}
-                self.ids.container.add_widget(self.canvas_widget)
-            except Exception as e:
-                Logger.exception(f"Graph iOS erro: {e}")
-        else:
-            # desktop: matplotlib
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
-            import matplotlib.dates as mdates
-            from kivy_garden.matplotlib import FigureCanvasKivyAgg
-            from datetime import datetime as dt
-
-            plt.close('all')
-            timestamps = [dt.strptime(row[0], "%Y-%m-%d %H:%M:%S") for row in self.data]
-
-            fig, ax = plt.subplots(figsize=(10, 4))
-            if '_corrente' in self.equip:
-                velocidades = [float(row[3]) for row in self.data]
-                direcoes = [float(row[4]) for row in self.data]
-                ax.plot(timestamps, velocidades, marker="o", linestyle="-", label="Velocidade (m/s)")
-                ax.plot(timestamps, direcoes, marker="s", linestyle="--", label="Direção (°)")
-                ax.set_title("Velocidade e Direção da Corrente")
-            elif '_onda' in self.equip or 'Ondografo' in self.equip:
-                altura = [float(row[1]) for row in self.data]
-                periodo = [float(row[2]) for row in self.data]
-                ax.plot(timestamps, altura, marker="o", linestyle="-", label="Altura (m)")
-                ax.plot(timestamps, periodo, marker="s", linestyle="--", label="Período (s)")
-                ax.set_title("Altura e Período de Onda")
-            elif 'Estacao' in self.equip:
-                vento = [float(row[1]) for row in self.data]
-                rajada = [float(row[2]) for row in self.data]
-                ax.plot(timestamps, vento, marker="o", linestyle="-", label="Vel. Vento (m/s)")
-                ax.plot(timestamps, rajada, marker="s", linestyle="--", label="Rajada (m/s)")
-                ax.set_title("Velocidade do Vento e Rajadas")
-            elif 'Maregrafo' in self.equip:
-                mare = [float(row[1]) for row in self.data]
-                ax.plot(timestamps, mare, marker="o", linestyle="-", label="Maré Reduzida (m)")
-                ax.set_title("Nível do Mar")
-
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-            ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-            fig.autofmt_xdate()
-            ax.set_xlabel("Tempo")
-            ax.legend()
-            ax.grid(True)
-
-            self.canvas_widget = FigureCanvasKivyAgg(fig)
-            self.canvas_widget.size_hint_y = 1
-            self.canvas_widget.pos_hint = {"center_x": 0.5, "center_y": 0.5}
-            self.ids.container.add_widget(self.canvas_widget)
+        pass
 
     # ---------- KV lifecycle ----------
     def on_kv_post(self, base_widget):
