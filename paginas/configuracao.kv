@@ -126,30 +126,6 @@
                                 height: self.minimum_height
 
                                 Label:
-                                    text: "Vel. Corr."
-                                    font_size: dp(18)
-                                    color: (0.02, 0.29, 0.61, 1)
-                                    halign: 'left'
-                                    valign: 'middle'
-                                    size_hint_y: None
-                                    height: dp(40)
-                                StyledCheckbox:
-                                    id: chkbx_b10_vel
-                                    on_state: app.toggle_parameter('Boia 10', 'Vel. Corr.', self.state)
-
-                                Label:
-                                    text: "Dir. Corr."
-                                    font_size: dp(18)
-                                    color: (0.02, 0.29, 0.61, 1)
-                                    halign: 'left'
-                                    valign: 'middle'
-                                    size_hint_y: None
-                                    height: dp(40)
-                                StyledCheckbox:
-                                    id: chkbx_b10_dir
-                                    on_state: app.toggle_parameter('Boia 10', 'Dir. Corr.', self.state)
-
-                                Label:
                                     text: "Altura Onda"
                                     font_size: dp(18)
                                     color: (0.02, 0.29, 0.61, 1)
@@ -174,7 +150,7 @@
                                     on_state: app.toggle_parameter('Boia 10', 'Período Onda', self.state)
 
                                 Label:
-                                    text: "Bateria"
+                                    text: "Dir. Corr."
                                     font_size: dp(18)
                                     color: (0.02, 0.29, 0.61, 1)
                                     halign: 'left'
@@ -182,8 +158,20 @@
                                     size_hint_y: None
                                     height: dp(40)
                                 StyledCheckbox:
-                                    id: chkbx_b10_bateria
-                                    on_state: app.toggle_parameter('Boia 10', 'Bateria', self.state)
+                                    id: chkbx_b10_dir
+                                    on_state: app.toggle_parameter('Boia 10', 'Dir. Corr.', self.state)
+
+                                Label:
+                                    text: "Vel. Corr."
+                                    font_size: dp(18)
+                                    color: (0.02, 0.29, 0.61, 1)
+                                    halign: 'left'
+                                    valign: 'middle'
+                                    size_hint_y: None
+                                    height: dp(40)
+                                StyledCheckbox:
+                                    id: chkbx_b10_vel
+                                    on_state: app.toggle_parameter('Boia 10', 'Vel. Corr.', self.state)
 
                                 Label:
                                     text: "Pitch"
@@ -208,6 +196,19 @@
                                 StyledCheckbox:
                                     id: chkbx_b10_roll
                                     on_state: app.toggle_parameter('Boia 10', 'Roll', self.state)
+
+                                Label:
+                                    text: "Bateria"
+                                    font_size: dp(18)
+                                    color: (0.02, 0.29, 0.61, 1)
+                                    halign: 'left'
+                                    valign: 'middle'
+                                    size_hint_y: None
+                                    height: dp(40)
+                                StyledCheckbox:
+                                    id: chkbx_b10_bateria
+                                    on_state: app.toggle_parameter('Boia 10', 'Bateria', self.state)
+
 
                         # ===================== Boia 08 =====================
                         BoxLayout:
@@ -248,30 +249,6 @@
                                 height: self.minimum_height
 
                                 Label:
-                                    text: "Vel. Corr."
-                                    font_size: dp(18)
-                                    color: (0.02, 0.29, 0.61, 1)
-                                    halign: 'left'
-                                    valign: 'middle'
-                                    size_hint_y: None
-                                    height: dp(40)
-                                StyledCheckbox:
-                                    id: chkbx_b08_vel
-                                    on_state: app.toggle_parameter('Boia 08', 'Vel. Corr.', self.state)
-
-                                Label:
-                                    text: "Dir. Corr."
-                                    font_size: dp(18)
-                                    color: (0.02, 0.29, 0.61, 1)
-                                    halign: 'left'
-                                    valign: 'middle'
-                                    size_hint_y: None
-                                    height: dp(40)
-                                StyledCheckbox:
-                                    id: chkbx_b08_dir
-                                    on_state: app.toggle_parameter('Boia 08', 'Dir. Corr.', self.state)
-
-                                Label:
                                     text: "Altura Onda"
                                     font_size: dp(18)
                                     color: (0.02, 0.29, 0.61, 1)
@@ -294,9 +271,8 @@
                                 StyledCheckbox:
                                     id: chkbx_b08_periodo
                                     on_state: app.toggle_parameter('Boia 08', 'Período Onda', self.state)
-
                                 Label:
-                                    text: "Bateria"
+                                    text: "Dir. Corr."
                                     font_size: dp(18)
                                     color: (0.02, 0.29, 0.61, 1)
                                     halign: 'left'
@@ -304,8 +280,20 @@
                                     size_hint_y: None
                                     height: dp(40)
                                 StyledCheckbox:
-                                    id: chkbx_b08_bateria
-                                    on_state: app.toggle_parameter('Boia 08', 'Bateria', self.state)
+                                    id: chkbx_b08_dir
+                                    on_state: app.toggle_parameter('Boia 08', 'Dir. Corr.', self.state)
+
+                                Label:
+                                    text: "Vel. Corr."
+                                    font_size: dp(18)
+                                    color: (0.02, 0.29, 0.61, 1)
+                                    halign: 'left'
+                                    valign: 'middle'
+                                    size_hint_y: None
+                                    height: dp(40)
+                                StyledCheckbox:
+                                    id: chkbx_b08_vel
+                                    on_state: app.toggle_parameter('Boia 08', 'Vel. Corr.', self.state)
 
                                 Label:
                                     text: "Pitch"
@@ -330,6 +318,18 @@
                                 StyledCheckbox:
                                     id: chkbx_b08_roll
                                     on_state: app.toggle_parameter('Boia 08', 'Roll', self.state)
+
+                                Label:
+                                    text: "Bateria"
+                                    font_size: dp(18)
+                                    color: (0.02, 0.29, 0.61, 1)
+                                    halign: 'left'
+                                    valign: 'middle'
+                                    size_hint_y: None
+                                    height: dp(40)
+                                StyledCheckbox:
+                                    id: chkbx_b08_bateria
+                                    on_state: app.toggle_parameter('Boia 08', 'Bateria', self.state)
 
                         # ===================== Boia 04 =====================
                         BoxLayout:
@@ -370,30 +370,6 @@
                                 height: self.minimum_height
 
                                 Label:
-                                    text: "Vel. Corr."
-                                    font_size: dp(18)
-                                    color: (0.02, 0.29, 0.61, 1)
-                                    halign: 'left'
-                                    valign: 'middle'
-                                    size_hint_y: None
-                                    height: dp(40)
-                                StyledCheckbox:
-                                    id: chkbx_b04_vel
-                                    on_state: app.toggle_parameter('Boia 04', 'Vel. Corr.', self.state)
-
-                                Label:
-                                    text: "Dir. Corr."
-                                    font_size: dp(18)
-                                    color: (0.02, 0.29, 0.61, 1)
-                                    halign: 'left'
-                                    valign: 'middle'
-                                    size_hint_y: None
-                                    height: dp(40)
-                                StyledCheckbox:
-                                    id: chkbx_b04_dir
-                                    on_state: app.toggle_parameter('Boia 04', 'Dir. Corr.', self.state)
-
-                                Label:
                                     text: "Altura Onda"
                                     font_size: dp(18)
                                     color: (0.02, 0.29, 0.61, 1)
@@ -418,7 +394,7 @@
                                     on_state: app.toggle_parameter('Boia 04', 'Período Onda', self.state)
 
                                 Label:
-                                    text: "Bateria"
+                                    text: "Dir. Corr."
                                     font_size: dp(18)
                                     color: (0.02, 0.29, 0.61, 1)
                                     halign: 'left'
@@ -426,8 +402,20 @@
                                     size_hint_y: None
                                     height: dp(40)
                                 StyledCheckbox:
-                                    id: chkbx_b04_bateria
-                                    on_state: app.toggle_parameter('Boia 04', 'Bateria', self.state)
+                                    id: chkbx_b04_dir
+                                    on_state: app.toggle_parameter('Boia 04', 'Dir. Corr.', self.state)
+
+                                Label:
+                                    text: "Vel. Corr."
+                                    font_size: dp(18)
+                                    color: (0.02, 0.29, 0.61, 1)
+                                    halign: 'left'
+                                    valign: 'middle'
+                                    size_hint_y: None
+                                    height: dp(40)
+                                StyledCheckbox:
+                                    id: chkbx_b04_vel
+                                    on_state: app.toggle_parameter('Boia 04', 'Vel. Corr.', self.state)
 
                                 Label:
                                     text: "Pitch"
@@ -452,6 +440,18 @@
                                 StyledCheckbox:
                                     id: chkbx_b04_roll
                                     on_state: app.toggle_parameter('Boia 04', 'Roll', self.state)
+
+                                Label:
+                                    text: "Bateria"
+                                    font_size: dp(18)
+                                    color: (0.02, 0.29, 0.61, 1)
+                                    halign: 'left'
+                                    valign: 'middle'
+                                    size_hint_y: None
+                                    height: dp(40)
+                                StyledCheckbox:
+                                    id: chkbx_b04_bateria
+                                    on_state: app.toggle_parameter('Boia 04', 'Bateria', self.state)
 
                         # ================= Ondógrafo Píer II =================
                         BoxLayout:

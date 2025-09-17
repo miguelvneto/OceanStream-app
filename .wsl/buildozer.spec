@@ -17,17 +17,17 @@ source.include_exts = py,png,jpg,kv,atlas,json
 source.main = main.py
 
 # Inclui todo o conteúdo da pasta res (se você usa imagens lá)
-#presplash.filename = res/logo.png
+presplash.filename = res/logo.png
 #android.presplash_color = #55E6C9
 
 # Versão do app
-version = 0.1
+version = 0.3.2
 
 # Ícone do app (opcional)
 icon.filename = res/logo.png
 
 # Linguagem requerida
-requirements = python3,kivy,kivymd,plyer,requests,pyjwt,kivy_garden.matplotlib,matplotlib,certifi,urllib3,chardet,idna,jnius
+requirements = python3,kivy,kivymd,plyer,requests,pyjwt,kivy_garden.matplotlib,certifi,urllib3,chardet,idna,jnius
 
 # Orientação de tela
 orientation = portrait
@@ -40,11 +40,11 @@ android.arch = arm64-v8a,armeabi-v7a
 
 # Configurações específicas
 android.minapi = 21
-android.sdk = 34
+android.sdk = 35
 android.ndk = 25b
-android.api = 34
-android.build_tools_version = 34.0.0
-android.target_api = 34
+android.api = 35
+android.build_tools_version = 35.0.0
+android.target_api = 35
 
 # Se quiser melhorar o tamanho do APK:
 # android.enable_optimizations = True
@@ -67,5 +67,8 @@ android.release_alias_passwd = JRuano
 fullscreen = 1
 android.enable_optimizations = True
 log_level = 2
-android.allow_backup = 0
+android.allow_backup = True
 android.hardwareAccelerated = 1
+
+# Para Android 10+ com scoped storage
+android.manifest_attributes = android:requestLegacyExternalStorage="true"
