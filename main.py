@@ -231,24 +231,33 @@ def api_lastestVersion():
         "Content-Type": "application/json",
         "Authorization": f"Bearer {get_access_token()}"
     }
-    url = API_PRFX+"lastestVersion/"
+    
+    platform_suffix = ""
+    if platform == 'android' or platform == 'win':
+        platform_suffix = 'android'
+    elif platform == 'ios':
+        platform_suffix = 'ios'
+    
+    url = API_PRFX + f"lastestVersion/{platform_suffix}" if platform_suffix else API_PRFX + "lastestVersion/"
+    
     try:
-        if platform == 'android' or platform == 'win':
-            url+='android'
-        elif platform == 'ios':
-            url+='ios'
-        else: # macOS, Linux (desktop) e outros
-            pass
         response = requests.post(url, headers=headers, timeout=HTTP_TIMEOUT)
-
+        
         if response.status_code != 200:
-            raise Exception(f"Erro na requisição: {response.status_code} - {response.text}")
-
-        return response.text
+            Logger.error(f"API lastestVersion: status {response.status_code} - {response.text}")
+            return None
+            
+        # Tenta parsear como JSON primeiro
+        try:
+            data = response.json()
+            return data.get('version') or data.get('latest_version') or response.text
+        except json.JSONDecodeError:
+            # Se não for JSON, retorna o texto puro
+            return response.text.strip()
 
     except Exception as e:
-        Logger.exception(f"API /ultimosDados erro: {e}")
-        return False
+        Logger.exception(f"API lastestVersion erro: {e}")
+        return None
 
 # =====================================================================
 #                    MAPAS / TABELAS / ARQUIVOS DE UI
@@ -1038,9 +1047,24 @@ class TelaLogin(MDScreen):
 
     def check_for_updates(self):
         """Verifica se há atualizações disponíveis antes de redirecionar para o overview"""
-        current_version = VERSAO_ATUAL
-        latest_version = api_lastestVersion()
+        def _check_thread():
+            try:
+                current_version = VERSAO_ATUAL
+                latest_version = api_lastestVersion()
 
+                # Agenda a atualização da UI na thread principal
+                Clock.schedule_once(lambda dt: self._handle_update_result(current_version, latest_version))
+
+            except Exception as e:
+                Logger.exception(f"Erro ao verificar atualizações: {e}")
+                # Em caso de erro, redireciona diretamente
+                Clock.schedule_once(lambda dt: self._redirect_to_overview())
+
+        # Executa a verificação em thread separada
+        Thread(target=_check_thread, daemon=True).start()
+
+    def _handle_update_result(self, current_version, latest_version):
+        """Manipula o resultado da verificação de atualização na thread principal"""
         if latest_version and tem_atualizacao(current_version, latest_version):
             self.show_update_dialog(current_version, latest_version)
         else:
@@ -1050,50 +1074,90 @@ class TelaLogin(MDScreen):
     def show_update_dialog(self, current_version, latest_version):
         """Mostra diálogo de atualização disponível"""
         texto = f"Atualização disponível!\n\nVersão atual: {current_version}\nVersão disponível: {latest_version}"
+
+        # Cria os botões
+        update_button = MDFlatButton(
+            text="Atualizar",
+            on_release=self.open_store
+        )
+        later_button = MDFlatButton(
+            text="Mais tarde",
+            on_release=lambda x: self._redirect_to_overview()
+        )
+
+        # Cria o diálogo
         self.dialog = MDDialog(
             title="Atualização Disponível",
             text=texto,
-            buttons=[
-                MDFlatButton(
-                    text="Atualizar",
-                    on_release=self.open_store
-                ),
-                MDFlatButton(
-                    text="Mais tarde",
-                    on_release=self._redirect_to_overview
-                ),
-            ],
+            buttons=[update_button, later_button],
         )
-        self.dialog.open()
+
+        # Abre o diálogo
+        try:
+            self.dialog.open()
+        except Exception as e:
+            Logger.exception(f"Erro ao abrir diálogo de atualização: {e}")
+            # Se falhar ao abrir o diálogo, redireciona diretamente
+            self._redirect_to_overview()
 
     def open_store(self, instance):
         """Abre a loja de aplicativos"""
         try:
+            # Fecha o diálogo primeiro
+            if hasattr(self, 'dialog') and self.dialog:
+                self.dialog.dismiss()
+
             store_urls = {
                 'android': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream",
-                'ios': "[iOS_direct_link]",
+                'ios': "https://apps.apple.com/app/oceanstream/id",  # Substitua pelo ID real
                 'win': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream",
-                'windows': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream"
             }
-            
-            import webbrowser
+
             url = store_urls.get(platform, store_urls['android'])
-            webbrowser.open(url)
-            
+
+            # No iOS, podemos tentar abrir a App Store
+            if platform == 'ios':
+                try:
+                    # Tenta usar o esquema app-store
+                    app_store_url = f"itms-apps://itunes.apple.com/app/id"  # Substitua pelo ID real
+                    import webbrowser
+                    webbrowser.open(app_store_url)
+                except:
+                    # Fallback para URL padrão
+                    import webbrowser
+                    webbrowser.open(url)
+            else:
+                import webbrowser
+                webbrowser.open(url)
+
         except Exception as e:
-            print(f"Erro ao abrir loja: {e}")
-            import webbrowser
-            webbrowser.open("https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream")
-        
+            Logger.exception(f"Erro ao abrir loja: {e}")
+
         finally:
             # Redireciona mesmo após tentar abrir a loja
-            self._redirect_to_overview()
+            Clock.schedule_once(lambda dt: self._redirect_to_overview(), 0.5)
 
     def _redirect_to_overview(self, instance=None):
-        self.dialog.dismiss()
-        """Redireciona para a tela overview"""
-        app = MDApp.get_running_app()
-        app.gerenciador.current = 'overview'
+        """Redireciona para a tela overview de forma segura"""
+        try:
+            # Fecha o diálogo se existir
+            if hasattr(self, 'dialog') and self.dialog:
+                self.dialog.dismiss()
+        except:
+            pass
+
+        # Agenda o redirecionamento na thread principal
+        Clock.schedule_once(lambda dt: self._safe_redirect_to_overview(), 0.1)
+
+    def _safe_redirect_to_overview(self):
+        """Redirecionamento seguro para overview"""
+        try:
+            app = MDApp.get_running_app()
+            app.gerenciador.current = 'overview'
+        except Exception as e:
+            Logger.exception(f"Erro ao redirecionar para overview: {e}")
+            # Fallback: tenta novamente após um delay
+            Clock.schedule_once(lambda dt: self._safe_redirect_to_overview(), 0.5)
 
 # ============================ Configuração UI ============================
 
