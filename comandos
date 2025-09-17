@@ -1,4 +1,6 @@
 linguagem utilizada no desenvolvimento: python v3.12.3
+versão do java (para buildozer): JDK 21
+distro instalada no WSL: Ubuntu
 SO: Windows 10 Pro x64 22H2
 versão do vscode: 1.92.1 (user setup)
 
@@ -25,3 +27,49 @@ deactivate
 
 salvar bibliotecas:
 pip freeze > requirements.txt
+
+
+////////////////
+comandos no prompt:
+
+wsl --set-default-version 2
+wsl --install Ubuntu-22.04
+unix user: environlink
+unix password: JRuano
+
+comandos no WSL:
+
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git zip unzip python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 libtinfo6 cmake libffi-dev libssl-dev openjdk-17-jdk wget curl libstdc++6
+pip install pip==22.0.2
+pip install buildozer==1.5.0
+pip install cython==3.0.12
+echo 'export PATH=$PATH:~/.local/bin' >> ~/.bashrc
+source ~/.bashrc
+
+
+ - comando para acessar a pasta
+(cd /mnt/c/caminho/para/a/pasta)
+cd /mnt/c/Prog/Projetos/OceanStream_buildozer
+
+ - gerar apk
+buildozer -v android debug
+ - gerar aab
+buildozer -v android release
+ - para limpar os arquivos do buildozer, e gerar uma nova versão "do zero" (faz demorar muito mais)
+buildozer android clean
+
+ - comando utilizado para gerar a chave auto assinada:
+keytool -genkey -v -keystore evlmetocean.keystore -alias evlmetocean -keyalg RSA -keysize 2048 -validity 10000
+ - a chave em uso está presente nesta mesma pasta sob o nome "evlmetocean.keystore" | a senha é "JRuano" (sem as aspas)
+
+ - comando para incorporar a assinatura ao .aab:
+jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore evlmetocean.keystore bin/oceanstream-0.3-arm64-v8a_armeabi-v7a-release.aab evlmetocean
+ -- LEMBRAR DE ALTERAR A VERSÃO A CADA NOVA RENDERIZAÇÃO                                              AQUI /\ e colocar conforme estiver no version do buildozer.spec
+ - comando para verificar se o .aab possui assinaturas:
+jarsigner -verify -verbose -certs bin/oceanstream-0.3-arm64-v8a_armeabi-v7a-release.aab
+
+ - para verificar o versionCode de um aab/apk
+sudo apt install aapt
+aapt dump badging bin/*.aab | grep versionCode
+aapt dump badging bin/*.apk | grep versionCode

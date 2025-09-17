@@ -1,42 +1,44 @@
 {
     "nome": "Overview - Cards",
-    "atualizado_em": "2025-08-19 17:12:26.405409",
+    "atualizado_em": "2025-08-20 18:42:18.761070",
     "cartoes": [
         {
             "maximize": true,
             "text": "Boia 10",
             "selecionado": [
-                "Bateria",
+                "Altura Onda",
+                "Período Onda",
+                "Dir. Corr.",
+                "Vel. Corr.",
                 "Pitch",
                 "Roll",
-                "Vel. Corr.",
-                "Dir. Corr.",
-                "Altura Onda",
-                "Período Onda"
+                "Bateria"
             ]
         },
         {
             "maximize": true,
             "text": "Boia 08",
             "selecionado": [
-                "Bateria",
-                "Período Onda",
                 "Altura Onda",
+                "Período Onda",
                 "Dir. Corr.",
-                "Vel. Corr."
+                "Vel. Corr.",
+                "Pitch",
+                "Roll",
+                "Bateria"
             ]
         },
         {
             "maximize": true,
             "text": "Boia 04",
             "selecionado": [
-                "Dir. Corr.",
-                "Período Onda",
-                "Vel. Corr.",
                 "Altura Onda",
-                "Bateria",
+                "Período Onda",
+                "Dir. Corr.",
+                "Vel. Corr.",
                 "Pitch",
-                "Roll"
+                "Roll",
+                "Bateria"
             ]
         },
         {
@@ -51,8 +53,8 @@
             "maximize": true,
             "text": "Ondógrafo TGL",
             "selecionado": [
-                "Período",
-                "Altura"
+                "Altura",
+                "Período"
             ]
         },
         {
@@ -67,8 +69,8 @@
             "maximize": true,
             "text": "Ondógrafo TPM",
             "selecionado": [
-                "Período",
-                "Altura"
+                "Altura",
+                "Período"
             ]
         },
         {

@@ -2,6 +2,8 @@
 # OceanStream – Kivy/KivyMD (iOS + desktop)
 # Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
 
+VERSAO_ATUAL = '0.3.2'
+
 from kivy.resources import resource_add_path, resource_find
 import glob
 
@@ -21,6 +23,7 @@ from kivy.animation import Animation
 from kivy.logger import Logger
 from kivy.app import App
 
+from kivymd.uix.dialog import MDDialog
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
 from kivy.uix.scrollview import ScrollView
@@ -32,17 +35,19 @@ from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.uix.card import MDCard
-from kivymd.uix.button import MDRectangleFlatButton, MDRaisedButton, MDIconButton, MDFlatButton
+# from kivymd.uix.button import MDRectangleFlatButton, MDRaisedButton, MDIconButton, MDFlatButton
+from kivymd.uix.button import MDRaisedButton, MDFlatButton
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.uix.pickers import MDDatePicker
-from kivymd.uix.menu import MDDropdownMenu
+# from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.label import MDLabel
-from kivymd.uix.list import OneLineListItem
+# from kivymd.uix.list import OneLineListItem
 
 from plyer import storagepath
 
 import os, json, requests, jwt, ssl
-from datetime import datetime, timedelta
+# from datetime import datetime, timedelta
+from datetime import datetime
 from threading import Thread
 
 # --- SSL relax (se seu backend exigir) ---
@@ -99,6 +104,18 @@ def app_data_dir():
 
 def data_path(filename):
     return os.path.join(app_data_dir(), filename)
+
+def tem_atualizacao(v_atual, v_disponivel):
+    if not v_disponivel:
+        return False
+    v_atual_partes = v_atual.split('.')
+    v_disp_partes = v_disponivel.split('.')
+    parte=0
+    for _ in v_disp_partes:
+        if not v_atual_partes[parte] or (int(v_disp_partes[parte]) > int(v_atual_partes[parte])):
+            return True
+        parte+=1
+    return False
 
 # =====================================================================
 #                          API / AUTENTICAÇÃO
@@ -209,9 +226,50 @@ def api_ultimosDados():
         Logger.exception(f"API /ultimosDados erro: {e}")
         return {"__error__": str(e)}
 
+def api_lastestVersion():
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {get_access_token()}"
+    }
+    url = API_PRFX+"lastestVersion/"
+    try:
+        if platform == 'android' or platform == 'win':
+            url+='android'
+        elif platform == 'ios':
+            url+='ios'
+        else: # macOS, Linux (desktop) e outros
+            pass
+        response = requests.post(url, headers=headers, timeout=HTTP_TIMEOUT)
+
+        if response.status_code != 200:
+            raise Exception(f"Erro na requisição: {response.status_code} - {response.text}")
+
+        return response.text
+
+    except Exception as e:
+        Logger.exception(f"API /ultimosDados erro: {e}")
+        return False
+
 # =====================================================================
 #                    MAPAS / TABELAS / ARQUIVOS DE UI
 # =====================================================================
+
+UNIDADES_MEDIDA = {
+    "Bateria":                 "V",
+    "Vel. Corr.":              "kt",
+    "Dir. Corr.":              "°",
+    "Pitch":                   "°",
+    "Roll":                    "°",
+    "Altura Onda":             "m",
+    "Período Onda":            "s",
+    "Altura":                  "m",
+    "Período":                 "s",
+    "Maré Reduzida":           "m",
+    "Vel. Vento":              "kt",
+    "Rajada":                  "kt",
+    "Dir. Vento":              "°",
+    "Chuva":                   "mm",
+}
 
 PARAMETROS_IMAGENS = {
     "Bateria":                 "res/bateria.png",
@@ -223,7 +281,7 @@ PARAMETROS_IMAGENS = {
     "Período Onda":            "res/Onda - oceanstream.png",
     "Altura":                  "res/Onda com linha- oceanstream.png",
     "Período":                 "res/Onda - oceanstream.png",
-    "Maré Reduzida":           "res/Regua maregrafo com seta - oceanstream (1).png",
+    "Maré Reduzida":           "res/Regua maregrafo com seta - oceanstream.png",
     "Vel. Vento":              "res/Pressao atmosferica - oceanstream.png",
     "Rajada":                  "res/Pressao atmosferica - oceanstream.png",
     "Dir. Vento":              "res/Rosa dos ventos - com direcao de cor diferente-oceanstream.png",
@@ -316,6 +374,19 @@ def save_cards_json(data):
 #                               UI
 # =====================================================================
 
+def adiciona_unidade(nome, valor):
+    if not nome or not valor: # caso algum parametro não tenha sido passado
+        Logger.exception(f"Erro ao adicionar unidade de medida: ambos parametros sao obrigatórios.")
+        return None
+
+    for grandeza, unidade in UNIDADES_MEDIDA.items():
+        if nome == grandeza:
+            valor = f'{valor}{unidade}'
+            return valor
+
+    Logger.exception(f"Erro ao adicionar unidade de medida: o nome passado não está registrado como uma das grandezas.")
+    return None
+
 class StyledCheckbox(MDCheckbox):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -354,10 +425,12 @@ class CardOverview(MDCard):
         image_row.bind(minimum_width=image_row.setter('width'))
 
         for source, top_text, bottom_text in imagens_dados:
+            bottom_text = adiciona_unidade(nome=top_text, valor=str(bottom_text))
+
             layout = BoxLayout(orientation='vertical', size_hint=(None, 1), width=self.tamanho[0], spacing=0)
             top_label = Label(text=top_text, size_hint=(1, None), height=dp(25), color=(0, 0, 0, 1))
             img = Image(source=source, size_hint=(1, None), height=self.tamanho[1], allow_stretch=True, keep_ratio=True)
-            bottom_label = Label(text=str(bottom_text), size_hint=(1, None), height=dp(20), color=(0, 0, 0, 1))
+            bottom_label = Label(text=bottom_text, size_hint=(1, None), height=dp(20), color=(0, 0, 0, 1))
             layout.add_widget(top_label)
             layout.add_widget(img)
             layout.add_widget(bottom_label)
@@ -393,6 +466,13 @@ class Overview(MDScreen):
             'Dir. Vento': 'Direcao_Vento',
             'Chuva': 'Chuva',
         }
+
+    def on_enter(self):
+        self.genereate_cards()
+
+    def on_leave(self):
+        # Mantém a flag para não verificar novamente
+        pass
 
     def _show_api_msg(self, text):
         self.ids.card_container.clear_widgets()
@@ -539,9 +619,6 @@ class Overview(MDScreen):
         else:
             self.ids.card_container.add_widget(Widget(size_hint_y=None, height=65))
             save_cards_json({"nome": "Overview - Cards", "atualizado_em": str(datetime.now()), "cartoes": self.card_configs})
-
-    def on_enter(self):
-        self.genereate_cards()
 
 class Alertas(MDScreen):
     pass
@@ -844,6 +921,7 @@ class TelaLogin(MDScreen):
         super().__init__(**kwargs)
         self._kb_bound = False
         self._last_focus_widget = None
+        self._pending_redirect = False  # Controla se há um redirecionamento pendente
 
     def on_kv_post(self, base_widget):
         Clock.schedule_once(self.verifica_token, 1.90)
@@ -938,7 +1016,7 @@ class TelaLogin(MDScreen):
         senha = self.ids.get("senha").text if self.ids.get("senha") else ""
         ok, msg = login(email, senha)
         if ok:
-            MDApp.get_running_app().gerenciador.current = 'overview'
+            self.check_for_updates()
         else:
             lbl = self.ids.get("error_message")
             if lbl:
@@ -952,10 +1030,70 @@ class TelaLogin(MDScreen):
         app = MDApp.get_running_app()
         token = get_access_token()
         if is_token_valid(token):
-            app.gerenciador.current = "overview"
+            # Verifica atualização antes de redirecionar
+            self.check_for_updates()
         else:
             delete_access_token()
             app.gerenciador.current = "login"
+
+    def check_for_updates(self):
+        """Verifica se há atualizações disponíveis antes de redirecionar para o overview"""
+        current_version = VERSAO_ATUAL
+        latest_version = api_lastestVersion()
+
+        if latest_version and tem_atualizacao(current_version, latest_version):
+            self.show_update_dialog(current_version, latest_version)
+        else:
+            # Não há atualização, pode redirecionar diretamente
+            self._redirect_to_overview()
+
+    def show_update_dialog(self, current_version, latest_version):
+        """Mostra diálogo de atualização disponível"""
+        texto = f"Atualização disponível!\n\nVersão atual: {current_version}\nVersão disponível: {latest_version}"
+        self.dialog = MDDialog(
+            title="Atualização Disponível",
+            text=texto,
+            buttons=[
+                MDFlatButton(
+                    text="Atualizar",
+                    on_release=self.open_store
+                ),
+                MDFlatButton(
+                    text="Mais tarde",
+                    on_release=self._redirect_to_overview
+                ),
+            ],
+        )
+        self.dialog.open()
+
+    def open_store(self, instance):
+        """Abre a loja de aplicativos"""
+        try:
+            store_urls = {
+                'android': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream",
+                'ios': "[iOS_direct_link]",
+                'win': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream",
+                'windows': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream"
+            }
+            
+            import webbrowser
+            url = store_urls.get(platform, store_urls['android'])
+            webbrowser.open(url)
+            
+        except Exception as e:
+            print(f"Erro ao abrir loja: {e}")
+            import webbrowser
+            webbrowser.open("https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream")
+        
+        finally:
+            # Redireciona mesmo após tentar abrir a loja
+            self._redirect_to_overview()
+
+    def _redirect_to_overview(self, instance=None):
+        self.dialog.dismiss()
+        """Redireciona para a tela overview"""
+        app = MDApp.get_running_app()
+        app.gerenciador.current = 'overview'
 
 # ============================ Configuração UI ============================
 
@@ -1193,7 +1331,6 @@ class OceanStream(MDApp):
     def logout(self):
         delete_access_token()
         self.gerenciador.current = 'login'
-
 
 if __name__ == '__main__':
     OceanStream().run()
