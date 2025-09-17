@@ -274,8 +274,8 @@ UNIDADES_MEDIDA = {
     "Altura":                  "m",
     "Período":                 "s",
     "Maré Reduzida":           "m",
-    "Vel. Vento":              "Kt",
-    "Rajada":                  "Kt",
+    "Vel. Vento":              "m/s",
+    "Rajada":                  "m/s",
     "Dir. Vento":              "°",
     "Chuva":                   "mm",
 }
@@ -334,8 +334,8 @@ CABECALHO_TABELA = {
     ],
     'Estacao': [
         ['TmStamp', 'Data Hora'],
-        ['Velocidade_Vento', 'Vel. Vento (Kt)'],
-        ['Rajada_Vento', 'Rajada (Kt)'],
+        ['Velocidade_Vento', 'Vel. Vento (m/s)'],
+        ['Rajada_Vento', 'Rajada (m/s)'],
         ['Direcao_Vento', 'Dir. Vento (°)'],
         ['Chuva', 'Chuva (mm)'],
     ],
