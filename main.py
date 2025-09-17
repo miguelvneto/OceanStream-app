@@ -265,7 +265,7 @@ def api_lastestVersion():
 
 UNIDADES_MEDIDA = {
     "Bateria":                 "V",
-    "Vel. Corr.":              "kt",
+    "Vel. Corr.":              "m/s",
     "Dir. Corr.":              "°",
     "Pitch":                   "°",
     "Roll":                    "°",
@@ -274,8 +274,8 @@ UNIDADES_MEDIDA = {
     "Altura":                  "m",
     "Período":                 "s",
     "Maré Reduzida":           "m",
-    "Vel. Vento":              "kt",
-    "Rajada":                  "kt",
+    "Vel. Vento":              "Kt",
+    "Rajada":                  "Kt",
     "Dir. Vento":              "°",
     "Chuva":                   "mm",
 }
@@ -315,9 +315,9 @@ EQUIPAMENTOS_TABELAS = {
 CABECALHO_TABELA = {
     '_corrente': [
         ['TmStamp', 'Data Hora'],
-        ['PNORS_Pitch', 'Pitch'],
-        ['PNORS_Roll', 'Roll'],
-        ['vel11', 'Vel. Corr.'],
+        ['PNORS_Pitch', 'Pitch (°)'],
+        ['PNORS_Roll', 'Roll (°)'],
+        ['vel11', 'Vel. Corr. (m/s)'],
         ['dir11', 'Direção (°)'],
         ['PNORS_Battery_Voltage', 'Bateria (V)'],
     ],
@@ -334,8 +334,8 @@ CABECALHO_TABELA = {
     ],
     'Estacao': [
         ['TmStamp', 'Data Hora'],
-        ['Velocidade_Vento', 'Vel. Vento'],
-        ['Rajada_Vento', 'Rajada'],
+        ['Velocidade_Vento', 'Vel. Vento (Kt)'],
+        ['Rajada_Vento', 'Rajada (Kt)'],
         ['Direcao_Vento', 'Dir. Vento (°)'],
         ['Chuva', 'Chuva (mm)'],
     ],
