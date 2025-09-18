@@ -330,7 +330,7 @@ CABECALHO_TABELA = {
     'Ondografo': [
         ['TmStamp', 'Data Hora'],
         ['hm0_alisado', 'Altura (m)'],
-        ['tp_alisado', 'Período (s)'],
+        ['tp', 'Período (s)'],
     ],
     'Estacao': [
         ['TmStamp', 'Data Hora'],
@@ -468,7 +468,7 @@ class Overview(MDScreen):
             'Altura Onda': 'PNORW_Hm0',
             'Período Onda': 'PNORW_Tp',
             'Altura': 'hm0_alisado',
-            'Período': 'tp_alisado',
+            'Período': 'tp',
             'Maré Reduzida': 'Mare_Reduzida',
             'Vel. Vento': 'Velocidade_Vento',
             'Rajada': 'Rajada_Vento',
@@ -875,10 +875,30 @@ class Equipamento(MDScreen):
                         lbl.text_size = (tam_col_1, None)
                     table_h.add_widget(lbl)
 
+        # def format_cell_value(value):
+        #     if value is None or value == "":
+        #         return "-"
+        #     return str(value)
+        
         def format_cell_value(value):
             if value is None or value == "":
                 return "-"
-            return str(value)
+            
+            try:
+                # Tenta converter para float
+                num_value = float(value)
+                
+                # Formata com 2 casas decimais e remove zeros à direita
+                formatted = f"{num_value:.2f}"
+                
+                # Remove zeros à direita e ponto decimal se necessário
+                if '.' in formatted:
+                    formatted = formatted.rstrip('0').rstrip('.')
+                
+                return formatted
+            except (ValueError, TypeError):
+                # Se não for um número, retorna o valor original
+                return str(value)
 
         for row in self.data:
             for i, cell in enumerate(row):
@@ -1091,6 +1111,9 @@ class TelaLogin(MDScreen):
             text=texto,
             buttons=[update_button, later_button],
         )
+        
+        # Adiciona o evento on_dismiss para quando o usuário clicar fora do diálogo
+        self.dialog.bind(on_dismiss=self._on_dialog_dismiss)
 
         # Abre o diálogo
         try:
@@ -1100,12 +1123,21 @@ class TelaLogin(MDScreen):
             # Se falhar ao abrir o diálogo, redireciona diretamente
             self._redirect_to_overview()
 
+    def _on_dialog_dismiss(self, instance):
+        """Chamado quando o diálogo é fechado (incluindo clicar fora dele)"""
+        # Verifica se o diálogo foi fechado sem clicar em um botão específico
+        if hasattr(self, 'dialog') and self.dialog:
+            # Redireciona para o overview quando o diálogo é fechado
+            self._redirect_to_overview()
+
     def open_store(self, instance):
         """Abre a loja de aplicativos"""
         try:
             # Fecha o diálogo primeiro
             if hasattr(self, 'dialog') and self.dialog:
                 self.dialog.dismiss()
+                # Remove o binding para evitar redirecionamento duplo
+                self.dialog.unbind(on_dismiss=self._on_dialog_dismiss)
 
             store_urls = {
                 'android': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream",
@@ -1140,8 +1172,9 @@ class TelaLogin(MDScreen):
     def _redirect_to_overview(self, instance=None):
         """Redireciona para a tela overview de forma segura"""
         try:
-            # Fecha o diálogo se existir
+            # Fecha o diálogo se existir e remove o binding
             if hasattr(self, 'dialog') and self.dialog:
+                self.dialog.unbind(on_dismiss=self._on_dialog_dismiss)
                 self.dialog.dismiss()
         except:
             pass
