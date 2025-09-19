@@ -271,6 +271,7 @@ UNIDADES_MEDIDA = {
     "Roll":                    "°",
     "Altura Onda":             "m",
     "Período Onda":            "s",
+    "Direção Onda":            "°",
     "Altura":                  "m",
     "Período":                 "s",
     "Maré Reduzida":           "m",
@@ -288,6 +289,7 @@ PARAMETROS_IMAGENS = {
     "Roll":                    "res/Pitch-Roll.png",
     "Altura Onda":             "res/Onda com linha- oceanstream.png",
     "Período Onda":            "res/Onda - oceanstream.png",
+    "Direção Onda":            "res/corrente-seta-direita.png",
     "Altura":                  "res/Onda com linha- oceanstream.png",
     "Período":                 "res/Onda - oceanstream.png",
     "Maré Reduzida":           "res/Regua maregrafo com seta - oceanstream.png",
@@ -467,6 +469,7 @@ class Overview(MDScreen):
             'Bateria': 'PNORS_Battery_Voltage',
             'Altura Onda': 'PNORW_Hm0',
             'Período Onda': 'PNORW_Tp',
+            'Direção Onda': 'PNORW_DirTp',
             'Altura': 'hm0_alisado',
             'Período': 'tp',
             'Maré Reduzida': 'Mare_Reduzida',
@@ -551,7 +554,6 @@ class Overview(MDScreen):
             msg = ultimosDados.get("__error__") or "Erro genérico ao consultar a API."
             Clock.schedule_once(lambda dt: self._show_api_msg(f"Erro ao carregar dados:\n{msg}"), 0)
             return
-        # --- fim tratamento de erro ---
 
         cards_data = []
         for idx, config in enumerate(self.card_configs):
@@ -571,6 +573,9 @@ class Overview(MDScreen):
             else:
                 data_hora = dados.get('TmStamp', '')[:-5]
                 awac = False
+            
+            # Altera padrão do timestamp
+            data_hora = datetime.strptime(data_hora, '%Y-%m-%d %H:%M').strftime('%d/%m/%Y %H:%M')
 
             imagens_dados = []
             for param in selected_parameters[equipment]:
@@ -875,30 +880,35 @@ class Equipamento(MDScreen):
                         lbl.text_size = (tam_col_1, None)
                     table_h.add_widget(lbl)
 
-        # def format_cell_value(value):
-        #     if value is None or value == "":
-        #         return "-"
-        #     return str(value)
-        
         def format_cell_value(value):
             if value is None or value == "":
                 return "-"
             
+            # Verifica se é um timestamp (formato ISO ou similar)
             try:
-                # Tenta converter para float
-                num_value = float(value)
+                # Tenta converter para datetime
+                from datetime import datetime
+                dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
                 
-                # Formata com 2 casas decimais e remove zeros à direita
-                formatted = f"{num_value:.2f}"
-                
-                # Remove zeros à direita e ponto decimal se necessário
-                if '.' in formatted:
-                    formatted = formatted.rstrip('0').rstrip('.')
-                
-                return formatted
-            except (ValueError, TypeError):
-                # Se não for um número, retorna o valor original
-                return str(value)
+                # Formata no padrão desejado: "dd/mm/aaaa - hh:mm"
+                return dt.strftime("%d/%m/%Y - %H:%M")
+            except (ValueError, TypeError, AttributeError):
+                # Se não for um timestamp, tenta formatar como número
+                try:
+                    # Tenta converter para float
+                    num_value = float(value)
+                    
+                    # Formata com 2 casas decimais e remove zeros à direita
+                    formatted = f"{num_value:.2f}"
+                    
+                    # Remove zeros à direita e ponto decimal se necessário
+                    if '.' in formatted:
+                        formatted = formatted.rstrip('0').rstrip('.')
+                    
+                    return formatted
+                except (ValueError, TypeError):
+                    # Se não for um número, retorna o valor original
+                    return str(value)
 
         for row in self.data:
             for i, cell in enumerate(row):
