@@ -2,7 +2,7 @@
 # OceanStream – Kivy/KivyMD (iOS + desktop)
 # Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
 
-VERSAO_ATUAL = '0.3.2'
+VERSAO_ATUAL = '0.3.3'
 
 from kivy.resources import resource_add_path, resource_find
 import glob
@@ -274,6 +274,7 @@ UNIDADES_MEDIDA = {
     "Direção Onda":            "°",
     "Altura":                  "m",
     "Período":                 "s",
+    "Período Médio":           "s",
     "Maré Reduzida":           "m",
     "Vel. Vento":              "m/s",
     "Rajada":                  "m/s",
@@ -292,6 +293,7 @@ PARAMETROS_IMAGENS = {
     "Direção Onda":            "res/corrente-seta-direita.png",
     "Altura":                  "res/Onda com linha- oceanstream.png",
     "Período":                 "res/Onda - oceanstream.png",
+    "Período Médio":           "res/Onda - oceanstream.png",
     "Maré Reduzida":           "res/Regua maregrafo com seta - oceanstream.png",
     "Vel. Vento":              "res/Pressao atmosferica - oceanstream.png",
     "Rajada":                  "res/Pressao atmosferica - oceanstream.png",
@@ -333,6 +335,7 @@ CABECALHO_TABELA = {
         ['TmStamp', 'Data Hora'],
         ['hm0_alisado', 'Altura (m)'],
         ['tp', 'Período (s)'],
+        ['tz', 'Período Médio (s)'],
     ],
     'Estacao': [
         ['TmStamp', 'Data Hora'],
@@ -472,6 +475,7 @@ class Overview(MDScreen):
             'Direção Onda': 'PNORW_DirTp',
             'Altura': 'hm0_alisado',
             'Período': 'tp',
+            'Período Médio': 'tz',
             'Maré Reduzida': 'Mare_Reduzida',
             'Vel. Vento': 'Velocidade_Vento',
             'Rajada': 'Rajada_Vento',
@@ -1212,7 +1216,7 @@ class Configuracao(MDScreen):
             'Pitch': 'pitch', 'Roll': 'roll',
             'Vel. Corr.': 'vel', 'Dir. Corr.': 'dir',
             'Altura Onda': 'altura', 'Período Onda': 'periodo',
-            'Altura': 'altura', 'Período': 'periodo',
+            'Altura': 'altura', 'Período': 'periodo', 'Período Médio': 'periodo_medio',
             'Bateria': 'bateria', 'Maré Reduzida': 'mare',
             'Vel. Vento': 'velvento', 'Rajada': 'rajada',
             'Dir. Vento': 'dirvento', 'Chuva': 'chuva',
