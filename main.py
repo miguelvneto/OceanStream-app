@@ -2,7 +2,7 @@
 # OceanStream – Kivy/KivyMD (iOS + desktop)
 # Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
 
-VERSAO_ATUAL = '0.3.3'
+VERSAO_ATUAL = '0.3.4'
 
 from kivy.resources import resource_add_path, resource_find
 import glob
