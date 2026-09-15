@@ -2,7 +2,8 @@
 # OceanStream – Kivy/KivyMD (iOS + desktop)
 # Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
 
-VERSAO_ATUAL = '0.3.4'
+# VERSAO_ATUAL = '0.3.4'
+VERSAO_ATUAL = '0.4.1'
 
 from kivy.resources import resource_add_path, resource_find
 import glob
@@ -112,9 +113,18 @@ def tem_atualizacao(v_atual, v_disponivel):
     v_disp_partes = v_disponivel.split('.')
     parte=0
     for _ in v_disp_partes:
-        if not v_atual_partes[parte] or (int(v_disp_partes[parte]) > int(v_atual_partes[parte])):
+        atual = int(v_atual_partes[parte]) if v_atual_partes[parte] else 0
+        disponivel = int(v_disp_partes[parte])
+
+        if disponivel > atual:
+            # Caso não consiga ver a versão atual, ou caso a versão disponível seja maior, retorna True
             return True
+        elif atual > disponivel:
+            # Caso a versão atual seja maior que a disponível, retorna False (útil para ambiente de teste)
+            return False
         parte+=1
+
+    # Caso todas as partes sejam iguais, ou a versão atual tenha mais partes que a disponível, retorna False (não há atualização)
     return False
 
 # =====================================================================
@@ -246,7 +256,7 @@ def api_lastestVersion():
         if response.status_code != 200:
             Logger.error(f"API lastestVersion: status {response.status_code} - {response.text}")
             return None
-            
+
         # Tenta parsear como JSON primeiro
         try:
             data = response.json()
