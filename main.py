@@ -46,13 +46,11 @@ from kivymd.uix.label import MDLabel
 
 from plyer import storagepath
 
-import os, json, requests, jwt, ssl
+import os, json, requests, jwt
 # from datetime import datetime, timedelta
 from datetime import datetime
 from threading import Thread
 
-# --- SSL relax (se seu backend exigir) ---
-ssl._create_default_https_context = ssl._create_unverified_context
 
 # --- tentar importar sua barra de navegação; cria stub se ausente ---
 try:
@@ -131,7 +129,10 @@ def tem_atualizacao(v_atual, v_disponivel):
 #                          API / AUTENTICAÇÃO
 # =====================================================================
 
-API_PRFX = "https://oceanstream-8b3329b99e40.herokuapp.com/"
+API_PRFX = os.getenv(
+    "OCEANSTREAM_API_URL",
+    "https://oceanstream-8b3329b99e40.herokuapp.com/"
+).rstrip("/") + "/"
 JWT_FILE = "oceanstream.jwt"
 HTTP_TIMEOUT = 25
 
@@ -169,6 +170,8 @@ def is_token_valid(token: str) -> bool:
     try:
         if not token:
             return False
+        # Local expiry check only.
+        # Token authenticity is validated by the backend on authenticated requests.
         decoded = jwt.decode(token, options={"verify_signature": False})
         exp_ts = decoded.get("exp")
         if exp_ts:
