@@ -3,7 +3,12 @@
 # Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
 
 # VERSAO_ATUAL = '0.3.4'
-VERSAO_ATUAL = '0.4.1'
+VERSAO_ATUAL = '0.4.1'  # Integração de app_version.py pendente de decisão.
+
+from update_utils import (
+    APP_STORE_ID, normalize_version, parse_version_response,
+    store_urls, tem_atualizacao,
+)
 
 from kivy.resources import resource_add_path, resource_find
 import glob
@@ -103,27 +108,6 @@ def app_data_dir():
 
 def data_path(filename):
     return os.path.join(app_data_dir(), filename)
-
-def tem_atualizacao(v_atual, v_disponivel):
-    if not v_disponivel:
-        return False
-    v_atual_partes = v_atual.split('.')
-    v_disp_partes = v_disponivel.split('.')
-    parte=0
-    for _ in v_disp_partes:
-        atual = int(v_atual_partes[parte]) if v_atual_partes[parte] else 0
-        disponivel = int(v_disp_partes[parte])
-
-        if disponivel > atual:
-            # Caso não consiga ver a versão atual, ou caso a versão disponível seja maior, retorna True
-            return True
-        elif atual > disponivel:
-            # Caso a versão atual seja maior que a disponível, retorna False (útil para ambiente de teste)
-            return False
-        parte+=1
-
-    # Caso todas as partes sejam iguais, ou a versão atual tenha mais partes que a disponível, retorna False (não há atualização)
-    return False
 
 # =====================================================================
 #                          API / AUTENTICAÇÃO
@@ -257,16 +241,13 @@ def api_lastestVersion():
         response = requests.post(url, headers=headers, timeout=HTTP_TIMEOUT)
         
         if response.status_code != 200:
-            Logger.error(f"API lastestVersion: status {response.status_code} - {response.text}")
+            Logger.error(f"API lastestVersion: status {response.status_code}")
             return None
 
-        # Tenta parsear como JSON primeiro
-        try:
-            data = response.json()
-            return data.get('version') or data.get('latest_version') or response.text
-        except json.JSONDecodeError:
-            # Se não for JSON, retorna o texto puro
-            return response.text.strip()
+        version = parse_version_response(response.text)
+        if version is None:
+            Logger.warning("API lastestVersion: resposta de versão inválida")
+        return version
 
     except Exception as e:
         Logger.exception(f"API lastestVersion erro: {e}")
@@ -1094,130 +1075,136 @@ class TelaLogin(MDScreen):
 
     def check_for_updates(self):
         """Verifica se há atualizações disponíveis antes de redirecionar para o overview"""
+        request_id = getattr(self, '_update_request_id', 0) + 1
+        self._update_request_id = request_id
+        self._update_result_handled = False
+        self._update_redirect_scheduled = False
+        try:
+            self._close_update_dialog()
+        except Exception:
+            Logger.exception("Update: falha ao fechar diálogo anterior")
+
         def _check_thread():
+            current_version = VERSAO_ATUAL
             try:
-                current_version = VERSAO_ATUAL
                 latest_version = api_lastestVersion()
+            except Exception:
+                Logger.exception("Erro ao verificar atualizações")
+                latest_version = None
+            Clock.schedule_once(
+                lambda dt: self._handle_update_result(current_version, latest_version, request_id)
+            )
 
-                # Agenda a atualização da UI na thread principal
-                Clock.schedule_once(lambda dt: self._handle_update_result(current_version, latest_version))
+        try:
+            Thread(target=_check_thread, daemon=True).start()
+        except Exception:
+            Logger.exception("Update: falha ao iniciar consulta")
+            self._handle_update_result(VERSAO_ATUAL, None, request_id)
 
-            except Exception as e:
-                Logger.exception(f"Erro ao verificar atualizações: {e}")
-                # Em caso de erro, redireciona diretamente
-                Clock.schedule_once(lambda dt: self._redirect_to_overview())
-
-        # Executa a verificação em thread separada
-        Thread(target=_check_thread, daemon=True).start()
-
-    def _handle_update_result(self, current_version, latest_version):
-        """Manipula o resultado da verificação de atualização na thread principal"""
-        if latest_version and tem_atualizacao(current_version, latest_version):
-            self.show_update_dialog(current_version, latest_version)
-        else:
-            # Não há atualização, pode redirecionar diretamente
-            self._redirect_to_overview()
+    def _handle_update_result(self, current_version, latest_version, request_id):
+        """Consome somente o primeiro resultado da consulta vigente."""
+        if (request_id != self._update_request_id
+                or self._update_result_handled or self._update_redirect_scheduled):
+            return
+        self._update_result_handled = True
+        try:
+            if (tem_atualizacao(current_version, latest_version)
+                    and store_urls(platform, APP_STORE_ID)):
+                self.show_update_dialog(current_version, latest_version)
+                return
+        except Exception:
+            Logger.exception("Update: falha ao tratar resultado")
+        self._redirect_to_overview()
 
     def show_update_dialog(self, current_version, latest_version):
-        """Mostra diálogo de atualização disponível"""
-        texto = f"Atualização disponível!\n\nVersão atual: {current_version}\nVersão disponível: {latest_version}"
-
-        # Cria os botões
-        update_button = MDFlatButton(
-            text="Atualizar",
-            on_release=self.open_store
-        )
-        later_button = MDFlatButton(
-            text="Mais tarde",
-            on_release=lambda x: self._redirect_to_overview()
-        )
-
-        # Cria o diálogo
-        self.dialog = MDDialog(
-            title="Atualização Disponível",
-            text=texto,
-            buttons=[update_button, later_button],
-        )
-        
-        # Adiciona o evento on_dismiss para quando o usuário clicar fora do diálogo
-        self.dialog.bind(on_dismiss=self._on_dialog_dismiss)
-
-        # Abre o diálogo
+        """Protege também a construção do diálogo, mantendo o layout."""
         try:
+            if not store_urls(platform, APP_STORE_ID):
+                self._redirect_to_overview()
+                return
+            current = normalize_version(current_version)
+            latest = normalize_version(latest_version)
+            if current is None or latest is None:
+                self._redirect_to_overview()
+                return
+            current_version = ".".join(map(str, current))
+            latest_version = ".".join(map(str, latest))
+            texto = f"Atualização disponível!\n\nVersão atual: {current_version}\nVersão disponível: {latest_version}"
+            request_id = self._update_request_id
+            update_button = MDFlatButton(
+                text="Atualizar", on_release=lambda x: self.open_store(x, request_id)
+            )
+            later_button = MDFlatButton(
+                text="Mais tarde",
+                on_release=lambda x: self._redirect_to_overview(request_id=request_id),
+            )
+            self.dialog = MDDialog(
+                title="Atualização Disponível", text=texto,
+                buttons=[update_button, later_button],
+            )
+            self.dialog.bind(on_dismiss=self._on_dialog_dismiss)
             self.dialog.open()
-        except Exception as e:
-            Logger.exception(f"Erro ao abrir diálogo de atualização: {e}")
-            # Se falhar ao abrir o diálogo, redireciona diretamente
+        except Exception:
+            Logger.exception("Update: falha ao criar ou abrir diálogo")
             self._redirect_to_overview()
 
     def _on_dialog_dismiss(self, instance):
-        """Chamado quando o diálogo é fechado (incluindo clicar fora dele)"""
-        # Verifica se o diálogo foi fechado sem clicar em um botão específico
-        if hasattr(self, 'dialog') and self.dialog:
-            # Redireciona para o overview quando o diálogo é fechado
+        if getattr(self, 'dialog', None) is instance:
+            self.dialog = None
             self._redirect_to_overview()
 
-    def open_store(self, instance):
-        """Abre a loja de aplicativos"""
+    def _close_update_dialog(self):
+        dialog = getattr(self, 'dialog', None)
+        self.dialog = None
+        if dialog:
+            dialog.unbind(on_dismiss=self._on_dialog_dismiss)
+            dialog.dismiss()
+
+    def open_store(self, instance, request_id=None):
+        """Tenta destinos válidos; False e exceções permitem o fallback."""
+        if request_id is None:
+            request_id = self._update_request_id
+        if request_id != self._update_request_id or self._update_redirect_scheduled:
+            return
         try:
-            # Fecha o diálogo primeiro
-            if hasattr(self, 'dialog') and self.dialog:
-                self.dialog.dismiss()
-                # Remove o binding para evitar redirecionamento duplo
-                self.dialog.unbind(on_dismiss=self._on_dialog_dismiss)
-
-            store_urls = {
-                'android': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream",
-                'ios': "https://apps.apple.com/app/oceanstream/id",  # Substitua pelo ID real
-                'win': "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream",
-            }
-
-            url = store_urls.get(platform, store_urls['android'])
-
-            # No iOS, podemos tentar abrir a App Store
-            if platform == 'ios':
+            self._close_update_dialog()
+            import webbrowser
+            for url in store_urls(platform, APP_STORE_ID):
                 try:
-                    # Tenta usar o esquema app-store
-                    app_store_url = f"itms-apps://itunes.apple.com/app/id"  # Substitua pelo ID real
-                    import webbrowser
-                    webbrowser.open(app_store_url)
-                except:
-                    # Fallback para URL padrão
-                    import webbrowser
-                    webbrowser.open(url)
-            else:
-                import webbrowser
-                webbrowser.open(url)
-
-        except Exception as e:
-            Logger.exception(f"Erro ao abrir loja: {e}")
-
+                    if webbrowser.open(url):
+                        break
+                except Exception:
+                    Logger.warning("Update: falha ao abrir destino da loja")
+        except Exception:
+            Logger.exception("Update: falha ao abrir loja")
         finally:
-            # Redireciona mesmo após tentar abrir a loja
-            Clock.schedule_once(lambda dt: self._redirect_to_overview(), 0.5)
+            self._redirect_to_overview(request_id=request_id)
 
-    def _redirect_to_overview(self, instance=None):
-        """Redireciona para a tela overview de forma segura"""
+    def _redirect_to_overview(self, instance=None, request_id=None):
+        """Agenda uma única saída por verificação de atualização."""
+        if request_id is None:
+            request_id = self._update_request_id
+        if request_id != self._update_request_id or self._update_redirect_scheduled:
+            return
+        self._update_result_handled = True
+        self._update_redirect_scheduled = True
         try:
-            # Fecha o diálogo se existir e remove o binding
-            if hasattr(self, 'dialog') and self.dialog:
-                self.dialog.unbind(on_dismiss=self._on_dialog_dismiss)
-                self.dialog.dismiss()
-        except:
-            pass
+            self._close_update_dialog()
+        except Exception:
+            Logger.exception("Update: falha ao fechar diálogo")
+        Clock.schedule_once(lambda dt: self._safe_redirect_to_overview(request_id), 0.1)
 
-        # Agenda o redirecionamento na thread principal
-        Clock.schedule_once(lambda dt: self._safe_redirect_to_overview(), 0.1)
-
-    def _safe_redirect_to_overview(self):
-        """Redirecionamento seguro para overview"""
+    def _safe_redirect_to_overview(self, request_id):
+        """Ignora também redirecionamentos agendados por consultas antigas."""
+        if request_id != self._update_request_id:
+            return
         try:
             app = MDApp.get_running_app()
             app.gerenciador.current = 'overview'
         except Exception as e:
             Logger.exception(f"Erro ao redirecionar para overview: {e}")
             # Fallback: tenta novamente após um delay
-            Clock.schedule_once(lambda dt: self._safe_redirect_to_overview(), 0.5)
+            Clock.schedule_once(lambda dt: self._safe_redirect_to_overview(request_id), 0.5)
 
 # ============================ Configuração UI ============================
 

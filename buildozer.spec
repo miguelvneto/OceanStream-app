@@ -12,7 +12,7 @@ package.domain = org.oceanstream
 # Fonte principal
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json
-source.exclude_dirs = .git,.github,.wsl,.venv,venv,env,.buildozer,bin,docs,.signing,.release-secrets,__pycache__,.idea,.vscode,.vs,build,dist,tmp,temp,.pytest_cache,.mypy_cache,.ruff_cache,.tox,.nox
+source.exclude_dirs = .git,.github,.wsl,.venv,venv,env,.buildozer,bin,docs,.signing,.release-secrets,__pycache__,.idea,.vscode,.vs,build,dist,tmp,temp,.pytest_cache,.mypy_cache,.ruff_cache,.tox,.nox,tests
 source.exclude_patterns = */venv/*,*/env/*,*/__pycache__/*,comandos,*/comandos,p4a_env_vars.txt,*/p4a_env_vars.txt,*.keystore,*.jks,.env,.env.*,*/.env,*/.env.*,signing.properties,*/signing.properties,keystore.properties,*/keystore.properties,key.properties,*/key.properties,signing.local.*,*/signing.local.*,release-signing.local.*,*/release-signing.local.*,release-credentials.*,*/release-credentials.*,release_credentials.*,*/release_credentials.*,oceanstream.jwt,*/oceanstream.jwt,*~,*.bak,*.orig,*.rej,*.tmp,*.temp,*.swp,*.swo,*.pyc,*.pyo,*.code-workspace,*.sublime-project,*.sublime-workspace,*.iml
 
 # Arquivo principal

@@ -78,6 +78,18 @@ e [geração de metadados](https://github.com/kivy/python-for-android/blob/v2024
 do p4a v2024.01.21, sem afirmar que esse commit produziu o último release;
 [armazenamento no Android 11](https://developer.android.com/about/versions/11/privacy/storage).
 
+## Versionamento e atualização (Fase 5 parcial)
+
+A integração de `app_version.py` está pendente da escolha explícita da versão.
+O módulo contém `__version__ = None` e ainda não é consumido. Continuam
+`version = 0.3.4` no spec e `VERSAO_ATUAL = '0.4.1'` no aplicativo; não publicar
+supondo que essa divergência já foi resolvida. O comparador e o tratamento de
+respostas/lojas foram protegidos sem escolher o número de release.
+
+`tests/` foi acrescentado às exclusões para não empacotar os testes Python.
+`app_version.py` e `update_utils.py` são selecionados pelos filtros existentes.
+Consulte [app-updates.md](app-updates.md) para o contrato, testes e pendências.
+
 ## Inventário obrigatório antes do primeiro build
 
 A posição do spec padroniza a execução, mas não garante reprodução exata dos
