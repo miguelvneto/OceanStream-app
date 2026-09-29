@@ -12,6 +12,8 @@ package.domain = org.oceanstream
 # Fonte principal
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json
+source.exclude_dirs = .git,.github,.wsl,.venv,venv,env,.buildozer,bin,docs,.signing,.release-secrets,__pycache__,.idea,.vscode,.vs,build,dist,tmp,temp,.pytest_cache,.mypy_cache,.ruff_cache,.tox,.nox
+source.exclude_patterns = */venv/*,*/env/*,*/__pycache__/*,comandos,*/comandos,p4a_env_vars.txt,*/p4a_env_vars.txt,*.keystore,*.jks,.env,.env.*,*/.env,*/.env.*,signing.properties,*/signing.properties,keystore.properties,*/keystore.properties,key.properties,*/key.properties,signing.local.*,*/signing.local.*,release-signing.local.*,*/release-signing.local.*,release-credentials.*,*/release-credentials.*,release_credentials.*,*/release_credentials.*,oceanstream.jwt,*/oceanstream.jwt,*~,*.bak,*.orig,*.rej,*.tmp,*.temp,*.swp,*.swo,*.pyc,*.pyo,*.code-workspace,*.sublime-project,*.sublime-workspace,*.iml
 
 # Arquivo principal
 source.main = main.py
@@ -27,13 +29,13 @@ version = 0.3.4
 icon.filename = res/logo.png
 
 # Linguagem requerida
-requirements = python3,kivy,kivymd,plyer,requests,pyjwt,kivy_garden.matplotlib,certifi,urllib3,chardet,idna,jnius
+requirements = python3,kivy,kivymd,plyer,requests,pyjwt,pillow,certifi,urllib3,chardet,idna,pyjnius
 
 # Orientação de tela
 orientation = portrait
 
 # Permissões necessárias
-android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
+android.permissions = INTERNET
 
 # Arquitetura suportada
 android.arch = arm64-v8a,armeabi-v7a
@@ -65,6 +67,3 @@ android.enable_optimizations = True
 log_level = 2
 android.allow_backup = True
 android.hardwareAccelerated = 1
-
-# Para Android 10+ com scoped storage
-android.manifest_attributes = android:requestLegacyExternalStorage="true"

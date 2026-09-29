@@ -4,7 +4,7 @@
 
 Execute os comandos a partir da raiz do repositório. O único `buildozer.spec`
 fica junto de `main.py`, `navigation_bar.py`, `paginas/`, `res/` e `data/`.
-O arquivo foi movido de `.wsl/buildozer.spec` sem alterar seu conteúdo.
+Na Fase 2, o arquivo foi movido de `.wsl/buildozer.spec` sem alterar seu conteúdo.
 
 Com `source.dir = .`, a raiz contém os fontes. `icon.filename` e
 `presplash.filename` continuam apontando para `res/logo.png`. Os caminhos
@@ -18,12 +18,65 @@ ambiente sem antes registrar a cadeia usada no último build válido.
 ## Configurações preservadas
 
 Permanecem API 35, target declarado 35, minAPI 21, NDK 25b, arquiteturas
-`arm64-v8a,armeabi-v7a`, permissões, dependências, versão e opções do spec.
-Nenhuma ferramenta foi atualizada e nenhum build foi executado nesta organização.
+`arm64-v8a,armeabi-v7a` e versão do aplicativo. As declarações de Python, Kivy e
+KivyMD e as demais opções do spec permanecem iguais, exceto pelos filtros,
+dependências e permissões descritos abaixo para a Fase 4.
+Nenhuma ferramenta foi atualizada e nenhum build foi executado nesta fase.
 
 A assinatura continua usando as mesmas variáveis e identidade descritas em
 [android-release-signing.md](android-release-signing.md). O caminho absoluto
 do keystore não depende da posição do spec. Não gere ou substitua chaves.
+
+## Higiene do empacotamento (Fase 4)
+
+O `.gitignore` não filtra o pacote Android. O spec mantém
+`source.include_exts = py,png,jpg,kv,atlas,json` e acrescenta exclusões explícitas
+de ambientes virtuais, caches, documentação, artefatos, arquivos temporários,
+configuração de editores e credenciais locais. As listas `source.exclude_dirs`
+e `source.exclude_patterns` ocupam uma linha cada, separadas por vírgulas:
+o Buildozer 1.5.0 lê esses valores com `split(',')` e remove espaços de cada item.
+
+`source.exclude_dirs` cobre diretórios relativos à raiz; os padrões também
+bloqueiam `venv/`, `env/` e `__pycache__/` aninhados. Diretórios e arquivos ocultos
+já são descartados pelo Buildozer 1.5.0. Arquivos sem extensão podem passar pelo
+filtro de extensões, por isso `comandos` tem exclusão explícita.
+
+Os filtros preservam os 52 arquivos selecionados na árvore atual: quatro na
+raiz, sete em `paginas/`, 38 em `res/` e três em `data/`. Permanecem incluídos
+`main.py`, `res/logo.png` e `data/cards.json`. `.env.example` pode ser versionado,
+mas fica fora do pacote. Credenciais com nomes arbitrários dentro de um JSON ou
+Python permitido ainda podem ser incluídas; mantenha segredos fora dos fontes.
+
+Uma cópia local de `p4a_env_vars.txt` fica excluída dos fontes. O p4a também gera
+um arquivo desse nome durante o empacotamento: no APK antigo inspecionado, seus
+87 bytes continham apenas `P4A_IS_WINDOWED`, `KIVY_ORIENTATION`,
+`P4A_NUMERIC_VERSION` e `P4A_MINSDK`. Esse metadado pode continuar no APK;
+sua presença, isoladamente, não indica vazamento de credenciais.
+
+### Dependências e permissões
+
+- Removido `kivy_garden.matplotlib`: não há import ativo e `plot_graph()` é vazio.
+- Substituído `jnius` por `pyjnius`, nome da receita; o módulo Python é `jnius`.
+- Adicionado `pillow`, dependência do KivyMD 1.2.0, cujo pacote de seletores
+  importa o seletor de cores que usa PIL. Sua receita nativa exige validação
+  no ambiente Android antes do primeiro build.
+- Mantidos `certifi`, `urllib3`, `idna` e `chardet`. A receita Kivy 2.3.0 do p4a
+  consultado declara essas dependências; falta de import direto não justifica
+  removê-las. As versões continuam sem fixação no spec.
+- Mantida `INTERNET`. Removidas `READ_EXTERNAL_STORAGE` e
+  `WRITE_EXTERNAL_STORAGE`: o fluxo normal grava JWT e configurações em
+  `App.user_data_dir`, sem uso identificado de armazenamento compartilhado.
+- Removida a declaração `android.manifest_attributes` com
+  `requestLegacyExternalStorage`. No Android 11 ou superior, com target 30 ou
+  superior, essa flag é ignorada. Os fallbacks de armazenamento existentes
+  ainda precisam de teste em dispositivo, inclusive em Android antigo.
+
+Referências de implementação: receitas
+[Kivy](https://github.com/kivy/python-for-android/blob/v2024.01.21/pythonforandroid/recipes/kivy/__init__.py),
+[Pillow](https://github.com/kivy/python-for-android/blob/v2024.01.21/pythonforandroid/recipes/Pillow/__init__.py)
+e [geração de metadados](https://github.com/kivy/python-for-android/blob/v2024.01.21/pythonforandroid/bootstraps/common/build/build.py)
+do p4a v2024.01.21, sem afirmar que esse commit produziu o último release;
+[armazenamento no Android 11](https://developer.android.com/about/versions/11/privacy/storage).
 
 ## Inventário obrigatório antes do primeiro build
 
@@ -95,27 +148,24 @@ Um build concluído não substitui teste de inicialização, telas e acesso à A
 em dispositivo. A aceitação nas lojas e a assinatura de release são etapas
 separadas, ainda não validadas.
 
+Inspecione também o APK/AAB produzido: confirme os recursos necessários, o
+manifesto final e a ausência de ambientes virtuais, `comandos`, documentação e
+credenciais locais. Distinga o `p4a_env_vars.txt` gerado pelo p4a de cópias locais.
+A verificação dos filtros sem build não substitui essa inspeção do artefato.
+
 ## Problemas conhecidos, mantidos para análise posterior
 
 - `android.arch` é legado; `android.sdk` é obsoleto e ignorado.
 - No Buildozer 1.5.0 consultado, não há consumo identificado de `source.main`,
   `android.target_api`, `android.build_tools_version`, `android.enable_optimizations`,
-  `android.hardwareAccelerated`, `android.manifest_attributes` ou das entradas
+  `android.hardwareAccelerated` ou das entradas
   `android.release_keystore`/`android.release_alias`. A versão real deve ser conferida.
 - `log_level` está em `[app]`, em vez de `[buildozer]`.
 - `version = 0.3.4` difere de `VERSAO_ATUAL = '0.4.1'` no código.
-- Dependências não estão fixadas no spec; `jnius` precisa ser confrontado com a
-  receita `pyjnius`; gráficos sem uso e inclusão de Pillow precisam de revisão.
-- Permissões de armazenamento externo não têm uso identificado;
-  `requestLegacyExternalStorage` não resolve armazenamento para o target atual.
+- Dependências não estão fixadas no spec; ainda é necessário recuperar o ambiente
+  para impedir mudanças implícitas de versão no primeiro build.
 - Compatibilidade nativa, páginas de 16 KB e requisitos das lojas não estão
   comprovados pela simples movimentação do spec.
-
-O `.gitignore` não filtra o pacote Android. Mantenha credenciais fora da árvore
-de fontes ou nos diretórios ocultos definidos na documentação de assinatura.
-Prefira ambiente virtual externo ou `.venv`: diretórios não ocultos como `venv/`
-podem ter arquivos selecionados pelo Buildozer apesar de ignorados pelo Git.
-Nenhum filtro de empacotamento foi alterado nesta etapa.
 
 Referências usadas para conferir as opções, sem prescrever atualização de versão:
 [Buildozer 1.5.0](https://github.com/kivy/buildozer/blob/1.5.0/buildozer/__init__.py) e
