@@ -187,3 +187,7 @@ signing.local.*
 release-signing.local.*
 release-credentials.*
 release_credentials.*
+
+# Local Android build outputs
+/.buildozer/
+/bin/

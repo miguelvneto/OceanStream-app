@@ -2,7 +2,7 @@
 
 O OceanStream usa o identificador `org.oceanstream.oceanstream`. Para continuar
 atualizando o aplicativo publicado, preserve o keystore e a identidade de
-assinatura existentes. O spec permanece em `.wsl/buildozer.spec`.
+assinatura existentes. O spec fica em `buildozer.spec`, na raiz do repositório.
 
 O nome de keystore registrado é `evlmetocean.keystore` e o alias existente é
 `evlmetocean`. O caminho local pode variar entre máquinas; use o caminho absoluto
@@ -64,8 +64,10 @@ unset P4A_RELEASE_KEYSTORE_PASSWD P4A_RELEASE_KEYALIAS_PASSWD
 Prefira manter o keystore em seu local seguro atual, fora do repositório. Não é
 necessário movê-lo para aplicar esta configuração.
 
-O `.gitignore` protege arquivos `*.keystore`, `*.jks`, `.env`, `.env.*`, `*.env`,
-`*.env.*`, diretórios `.signing/` e `.release-secrets/`, além destes nomes:
+O `.gitignore` protege arquivos `*.keystore`, `*.jks`, `.env` e `.env.*`,
+com exceção de `.env.example`, que deve conter somente nomes de variáveis e
+valores fictícios, nunca credenciais reais. Também protege os diretórios
+`.signing/` e `.release-secrets/`, além destes nomes:
 
 - `signing.properties`, `keystore.properties`, `key.properties`;
 - `signing.local.*`, `release-signing.local.*`;
