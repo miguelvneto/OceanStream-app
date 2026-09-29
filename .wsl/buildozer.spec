@@ -58,12 +58,8 @@ android.release_keystore = evlmetocean.keystore
 # (android) The alias to use when signing the app
 android.release_alias = evlmetocean
 
-# (android) The password for the keystore
-android.release_keystore_passwd = JRuano
-
-# (android) The password for the alias
-android.release_alias_passwd = JRuano
-
+# Configure signing locally with P4A_RELEASE_* environment variables.
+# See docs/android-release-signing.md.
 fullscreen = 1
 android.enable_optimizations = True
 log_level = 2

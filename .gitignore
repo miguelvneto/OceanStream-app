@@ -122,7 +122,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .venv
 env/
 venv/
@@ -168,6 +167,23 @@ cython_debug/
 # Local application session/auth data
 oceanstream.jwt
 
-# Local environment files
+# Android signing keys
+*.keystore
+*.jks
+
+# Environment files
+.env
 .env.*
+# Examples must contain only variable names and fictitious values, never real credentials.
 !.env.example
+
+# Local signing configuration and release credentials
+.signing/
+.release-secrets/
+signing.properties
+keystore.properties
+key.properties
+signing.local.*
+release-signing.local.*
+release-credentials.*
+release_credentials.*
