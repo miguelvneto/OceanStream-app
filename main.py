@@ -30,6 +30,8 @@ from kivy.app import App
 
 from kivymd.uix.dialog import MDDialog
 from kivy.uix.widget import Widget
+from kivy.uix.modalview import ModalView
+from system_navigation import request_safe_area, back_action
 from kivy.uix.image import Image
 from directional_scrollview import DirectionalHorizontalScrollView
 from measurement_model import Measurement, equipment_snapshot
@@ -1384,7 +1386,30 @@ class OceanStream(MDApp):
     def on_start(self):
         # Calcula a safe area no início e mantém atualizada em mudanças de tamanho/orientação
         self._update_safe_area()
-        Window.bind(on_resize=lambda *_: self._update_safe_area())
+        Window.bind(on_resize=self._update_safe_area)
+        if IS_ANDROID:
+            Window.bind(on_keyboard=self._system_back)
+        # Initial native insets may arrive only after the first layout.
+        Clock.schedule_once(self._update_safe_area, .5)
+
+    def on_resume(self):
+        self._update_safe_area()
+        Clock.schedule_once(self._update_safe_area, .5)
+
+    def _system_back(self, window, key, *args):
+        screen = self.gerenciador.current_screen
+        blocked = (bool(Window.keyboard_height)
+                   or any(isinstance(child, ModalView) for child in Window.children)
+                   or any(getattr(widget, 'focus', False) for widget in screen.walk()))
+        action = back_action(platform, key, screen.name, blocked,
+                             getattr(screen, '_drawer_open', False))
+        if action == 'close_drawer':
+            screen.close_equipment_drawer()
+        elif action == 'overview':
+            self.gerenciador.current = 'overview'
+        else:
+            return False
+        return True
 
     # ---------- Safe Area helpers ----------
     def _has_notch_like_ratio(self):
@@ -1395,7 +1420,32 @@ class OceanStream(MDApp):
         ratio = max(w, h) / float(min(w, h))
         return ratio > 1.8
 
-    def _update_safe_area(self):
+    def _update_safe_area(self, *args):
+        generation = getattr(self, '_safe_area_generation', 0) + 1
+        self._safe_area_generation = generation
+        height = Window.height
+        def received(result):
+            Clock.schedule_once(lambda dt: self._apply_safe_area(generation, result), 0)
+        request_safe_area(platform, height, received)
+
+    def _apply_safe_area(self, generation, result):
+        if generation != self._safe_area_generation:
+            return
+        if result is not None:
+            self.safe_top, self.safe_bottom = result
+        else:
+            if not getattr(self, '_safe_area_warned', False):
+                Logger.warning('Navigation: insets nativos indisponíveis; usando fallback')
+                self._safe_area_warned = True
+            # Preserve the latest native geometry if a transient query fails.
+            if not getattr(self, '_has_native_safe_area', False):
+                self._fallback_safe_area()
+        if result is not None:
+            self._has_native_safe_area = True
+        if self.navigation_bar:
+            self.navigation_bar.bottom_inset = self.safe_bottom
+
+    def _fallback_safe_area(self):
         if platform == 'ios':
             portrait = Window.height >= Window.width
             if portrait:
@@ -1427,7 +1477,8 @@ class OceanStream(MDApp):
 
                 self.navigation_bar.size_hint = (1, None)
                 self.navigation_bar.height = dp(56)
-                self.navigation_bar.pos_hint = {"x": 0, "y": 0}
+                self.navigation_bar.pos_hint = {"x": 0}
+                self.navigation_bar.bottom_inset = self.safe_bottom
                 self.root_layout.add_widget(self.navigation_bar)
         else:
             if self.navigation_bar:

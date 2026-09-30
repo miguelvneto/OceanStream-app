@@ -5,9 +5,12 @@ from kivy.uix.label import Label
 from kivy.uix.floatlayout import FloatLayout
 from kivy.animation import Animation
 from kivy.metrics import dp
+from kivy.properties import NumericProperty
 from kivy.graphics import Color, RoundedRectangle
 
 class NavigationBar(MDBoxLayout):
+    bottom_inset = NumericProperty(0)
+
     def __init__(self, screen_manager, logout_callback, **kwargs):
         super().__init__(**kwargs)
         self.orientation = 'vertical'
@@ -117,6 +120,15 @@ class NavigationBar(MDBoxLayout):
 
         self.toolbar.add_widget(self.options_box)
         self.add_widget(self.toolbar)
+        self.bind(bottom_inset=self._position_above_system)
+        self.toolbar.bind(height=self._position_above_system, pos=self.update_logo_position)
+        self._position_above_system()
+
+    def _position_above_system(self, *args):
+        # Match animated toolbar height so expansion grows upward, never into
+        # the system gesture area. FloatLayout must not override this y via hint.
+        self.height = self.toolbar.height
+        self.y = self.bottom_inset
 
     def toggle_toolbar(self, instance):
         if self.options_box.height == 0:
@@ -134,7 +146,7 @@ class NavigationBar(MDBoxLayout):
         anim_options.start(self.options_box)
 
     def update_logo_position(self, instance, height_value):
-        self.expand_button.y = height_value - (self.expand_button.height / 2)
+        self.expand_button.y = self.toolbar.top - (self.expand_button.height / 2)
 
     def update_bg(self, *args):
         self.bg_rect.size = self.toolbar.size

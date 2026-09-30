@@ -63,7 +63,7 @@ android.release_alias = evlmetocean
 
 # Configure signing locally with P4A_RELEASE_* environment variables.
 # See docs/android-release-signing.md.
-fullscreen = 1
+fullscreen = 0
 android.enable_optimizations = True
 log_level = 2
 android.allow_backup = True
