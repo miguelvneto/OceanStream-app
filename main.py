@@ -2,8 +2,7 @@
 # OceanStream – Kivy/KivyMD (iOS + desktop)
 # Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
 
-# VERSAO_ATUAL = '0.3.4'
-VERSAO_ATUAL = '0.4.1'  # Integração de app_version.py pendente de decisão.
+from app_version import __version__ as VERSAO_ATUAL
 
 from update_utils import (
     APP_STORE_ID, normalize_version, parse_version_response,

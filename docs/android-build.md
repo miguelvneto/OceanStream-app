@@ -18,7 +18,8 @@ ambiente sem antes registrar a cadeia usada no último build válido.
 ## Configurações preservadas
 
 Permanecem API 35, target declarado 35, minAPI 21, NDK 25b, arquiteturas
-`arm64-v8a,armeabi-v7a` e versão do aplicativo. As declarações de Python, Kivy e
+`arm64-v8a,armeabi-v7a`. A versão comercial foi unificada na Fase 5B, descrita
+abaixo. As declarações de Python, Kivy e
 KivyMD e as demais opções do spec permanecem iguais, exceto pelos filtros,
 dependências e permissões descritos abaixo para a Fase 4.
 Nenhuma ferramenta foi atualizada e nenhum build foi executado nesta fase.
@@ -78,13 +79,17 @@ e [geração de metadados](https://github.com/kivy/python-for-android/blob/v2024
 do p4a v2024.01.21, sem afirmar que esse commit produziu o último release;
 [armazenamento no Android 11](https://developer.android.com/about/versions/11/privacy/storage).
 
-## Versionamento e atualização (Fase 5 parcial)
+## Fonte única de versão (Fase 5B)
 
-A integração de `app_version.py` está pendente da escolha explícita da versão.
-O módulo contém `__version__ = None` e ainda não é consumido. Continuam
-`version = 0.3.4` no spec e `VERSAO_ATUAL = '0.4.1'` no aplicativo; não publicar
-supondo que essa divergência já foi resolvida. O comparador e o tratamento de
-respostas/lojas foram protegidos sem escolher o número de release.
+A versão comercial do próximo release é **1.6**, definida em `app_version.py`.
+`main.py` importa esse valor e o spec usa `version.regex` e `version.filename`
+para extraí-lo. A declaração `__version__` deve permanecer na primeira linha,
+pois o Buildozer 1.5.0 usa `re.search` sem modo multilinha para o regex com `^`.
+Não combinar essas opções com uma declaração `version = ...` no spec.
+
+O versionCode publicado/testado é **1021304**. O próximo deverá ser maior,
+mas não foi definido: conferir a cadeia Buildozer/p4a na máquina Android antes
+de decidir. A versão comercial 1.6 não garante, sozinha, esse incremento.
 
 `tests/` foi acrescentado às exclusões para não empacotar os testes Python.
 `app_version.py` e `update_utils.py` são selecionados pelos filtros existentes.
@@ -173,7 +178,6 @@ A verificação dos filtros sem build não substitui essa inspeção do artefato
   `android.hardwareAccelerated` ou das entradas
   `android.release_keystore`/`android.release_alias`. A versão real deve ser conferida.
 - `log_level` está em `[app]`, em vez de `[buildozer]`.
-- `version = 0.3.4` difere de `VERSAO_ATUAL = '0.4.1'` no código.
 - Dependências não estão fixadas no spec; ainda é necessário recuperar o ambiente
   para impedir mudanças implícitas de versão no primeiro build.
 - Compatibilidade nativa, páginas de 16 KB e requisitos das lojas não estão

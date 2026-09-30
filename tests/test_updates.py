@@ -1,6 +1,7 @@
 """Testes sem Kivy, rede ou navegador; callbacks reais extraídos via AST."""
 import ast
 import configparser
+import re
 from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
@@ -84,15 +85,38 @@ class VersionTests(unittest.TestCase):
                          ('itms-apps://itunes.apple.com/app/id123456',
                           'https://apps.apple.com/app/id123456'))
 
-    def test_version_decision_remains_pending(self):
-        self.assertIsNone(app_version.__version__)
+    def test_single_version_source(self):
+        self.assertEqual(app_version.__version__, "1.6")
+        imports = [n for n in TREE.body if isinstance(n, ast.ImportFrom)
+                   and n.module == 'app_version']
+        self.assertEqual(len(imports), 1)
+        self.assertEqual([(n.name, n.asname) for n in imports[0].names],
+                         [('__version__', 'VERSAO_ATUAL')])
+        namespace = {}
+        exec(compile(ast.Module(body=imports, type_ignores=[]), 'version_import', 'exec'),
+             namespace)
+        self.assertEqual(namespace['VERSAO_ATUAL'], app_version.__version__)
+        assignments = [n for n in ast.walk(TREE) if isinstance(n, (ast.Assign, ast.AnnAssign))]
+        for node in assignments:
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            self.assertFalse(any(isinstance(t, ast.Name) and t.id == 'VERSAO_ATUAL'
+                                 for target in targets for t in ast.walk(target)))
+        self.assertNotIn('0.4.1', (ROOT / 'main.py').read_text())
+
+    def test_buildozer_reads_single_version_source(self):
         config = configparser.ConfigParser()
         config.read(ROOT / 'buildozer.spec')
-        self.assertEqual(config['app']['version'], '0.3.4')
+        self.assertNotIn('version', config['app'])
+        self.assertNotIn('android.numeric_version', config['app'])
+        self.assertEqual(config['app']['version.filename'], 'app_version.py')
+        source = (ROOT / config['app']['version.filename']).read_text()
+        # Buildozer 1.5.0 usa re.search sem flags e o primeiro grupo capturado.
+        match = re.search(config['app']['version.regex'], source)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.groups(), ('1.6',))
+        self.assertEqual(match.group(1), app_version.__version__)
+        self.assertNotIn('version = 0.3.4', (ROOT / 'buildozer.spec').read_text())
         self.assertIn('tests', config['app']['source.exclude_dirs'].split(','))
-        value = next(n.value.value for n in TREE.body if isinstance(n, ast.Assign)
-                     and any(isinstance(t, ast.Name) and t.id == 'VERSAO_ATUAL' for t in n.targets))
-        self.assertEqual(value, '0.4.1')
 
 
 class CallbackTests(unittest.TestCase):

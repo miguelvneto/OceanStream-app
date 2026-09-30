@@ -1,20 +1,31 @@
 # Atualizações do OceanStream — Fase 5
 
-## Decisão de versão pendente
+## Fonte única de versão comercial — Fase 5B
 
-`app_version.py` está preparado para ser a fonte única, mas `__version__ = None`
-é um marcador de pendência, não uma versão de release. Ainda não é importado
-pelo aplicativo nem lido pelo Buildozer. Foram preservados `VERSAO_ATUAL = '0.4.1'`
-em `main.py` e `version = 0.3.4` no spec. A divergência ainda existe.
+A versão comercial definida para o próximo release é **1.6**. `app_version.py`
+é a fonte única: `main.py` importa `__version__` como `VERSAO_ATUAL`, e o
+Buildozer lê a mesma declaração por `version.regex` e `version.filename`.
+A declaração deve permanecer na primeira linha do módulo: o regex começa com
+`^` e o Buildozer 1.5.0 usa `re.search` sem modo multilinha.
 
-Após decisão explícita do responsável pelo release, definir o valor no módulo,
-importá-lo no aplicativo e substituir a opção `version` do spec por
-`version.regex` e `version.filename`. Não manter simultaneamente as duas formas.
-Essa integração e seu teste de correspondência estão bloqueados pela decisão.
-Os testes atuais usam versões de exemplo e verificam que a pendência foi preservada.
+Android e iOS passam a compartilhar a versão comercial **1.6** a partir desse
+release. O projeto Xcode externo não foi alterado; sua Version deverá ser
+sincronizada com essa fonte na preparação do release iOS.
 
-Confirmar separadamente o versionCode Android e os metadados de versão/build
-no projeto Xcode externo. Nenhuma configuração iOS foi sincronizada nesta fase.
+Dados das lojas confirmados pelo responsável pelo release:
+
+- Android publicado/testado: versionName **0.3.4**, versionCode **1021304**,
+  target SDK **35**, min SDK **21**.
+- iOS publicado: Version **1.5**, Build **1.1**, Bundle ID **br.com.oceanstream**.
+
+O versionCode Android é independente da versão comercial e deverá ser
+**maior que 1021304**. Nenhum próximo valor foi definido no spec; a decisão
+será feita na máquina Android após conferir a cadeia real de Buildozer/p4a.
+Não presumir que a geração automática a partir de 1.6 produzirá um código adequado.
+
+O Build iOS também é independente e deverá ser **maior que 1.1**. Nenhum valor
+novo foi definido e o Bundle ID permanece preservado. `APP_STORE_ID` continua
+`None`, pendente do Apple ID numérico real.
 
 ## Contrato aceito
 

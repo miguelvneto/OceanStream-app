@@ -23,7 +23,8 @@ presplash.filename = res/logo.png
 #android.presplash_color = #55E6C9
 
 # Versão do app
-version = 0.3.4
+version.regex = ^__version__ = ['"]([0-9]+(?:\.[0-9]+)*)['"]
+version.filename = app_version.py
 
 # Ícone do app (opcional)
 icon.filename = res/logo.png

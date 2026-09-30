@@ -1,7 +1,4 @@
-"""Fonte única de versão preparada; integração pendente de decisão de release.
+__version__ = "1.6"
 
-Não importar este valor como versão efetiva enquanto for None.
-Os valores existentes no aplicativo e no spec permanecem preservados.
-"""
-
-__version__ = None
+# Fonte única da versão comercial; manter a declaração na primeira linha
+# para o version.regex do Buildozer 1.5.0.
