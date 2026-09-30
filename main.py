@@ -31,7 +31,7 @@ from kivy.app import App
 from kivymd.uix.dialog import MDDialog
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
-from kivy.uix.scrollview import ScrollView
+from directional_scrollview import DirectionalHorizontalScrollView
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
@@ -413,7 +413,7 @@ class CardOverview(MDCard):
 
     def add_image_scrollable(self, imagens_dados, target_layout=None):
         altura_total = self.tamanho[1] + dp(60)
-        scroll = ScrollView(
+        scroll = DirectionalHorizontalScrollView(
             size_hint=(1, None),
             height=altura_total,
             scroll_type=['bars', 'content'],
