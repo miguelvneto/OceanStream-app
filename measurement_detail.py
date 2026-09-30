@@ -5,6 +5,8 @@ from kivy.animation import Animation
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.text import Label as TextureLabel
+from kivy.core.image import Image as CoreImage
+from kivy.resources import resource_find
 from kivy.graphics import (Color, Line, Rectangle, RoundedRectangle, Triangle,
                            Ellipse, PushMatrix, PopMatrix, Scale)
 from kivy.metrics import dp, sp
@@ -18,7 +20,8 @@ from kivy.uix.modalview import ModalView
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
-from measurement_model import Measurement, direction_geometry, visual_scale, friendly_timestamp
+from measurement_model import (Measurement, direction_geometry, friendly_timestamp,
+                               measurement_ticks, tick_labels, indicator_angle, inclination_geometry, fitted_image_size)
 
 INK = (0.08, 0.18, 0.23, 1)
 ACCENT = (0.02, 0.55, 0.61, 1)
@@ -61,6 +64,11 @@ class MeasurementGraphic(Widget):
     def __init__(self, measurement, **kwargs):
         self.measurement = measurement
         self._textures = {}
+        self._equipment_texture = None
+        if measurement.renderer in ('pitch', 'roll'):
+            path = resource_find('res/equipamentos/nortek_awac.png')
+            if path:
+                self._equipment_texture = CoreImage(path).texture
         super().__init__(**kwargs)
         self._redraw = Clock.create_trigger(self._draw, 0)
         self.bind(pos=self._redraw, size=self._redraw, progress=self._redraw)
@@ -108,39 +116,81 @@ class MeasurementGraphic(Widget):
                 radius = max(dp(15), min(self.width, self.height) / 2 - dp(38))
                 Color(*PALE)
                 Line(circle=(cx, cy, radius), width=dp(8))
-                for angle in range(0, 360, 15):
+                for angle in range(0, 360, 5):
                     ux, uy, _ = direction_geometry(angle)
-                    inner = radius - dp(10 if angle % 90 == 0 else 5)
+                    major = angle % 30 == 0
+                    inner = radius - dp(12 if major else 4)
                     Color(*MUTED)
                     Line(points=[cx + inner * ux, cy + inner * uy,
-                                 cx + radius * ux, cy + radius * uy], width=1)
+                                 cx + radius * ux, cy + radius * uy], width=dp(1.2 if major else .6))
                 for text, x, y in [('N', cx, cy + radius + dp(20)),
                                    ('S', cx, cy - radius - dp(20)),
                                    ('E', cx + radius + dp(20), cy),
                                    ('O', cx - radius - dp(20), cy)]:
                     self._text(text, x, y, 16)
-                ux, uy, _ = direction_geometry((value % 360) * self.progress)
+                ux, uy, _ = direction_geometry(indicator_angle(value, self.progress, compass=True))
                 self._arrow(cx, cy, cx + ux * radius * .8, cy + uy * radius * .8)
                 Ellipse(pos=(cx-dp(5), cy-dp(5)), size=(dp(10), dp(10)))
+            elif kind in ('pitch', 'roll'):
+                radius = max(dp(12), min(self.width, self.height) / 2 - dp(36))
+                Color(*PALE)
+                Line(circle=(cx, cy, radius), width=dp(5))
+                if self._equipment_texture is not None:
+                    texture = self._equipment_texture
+                    width, height = fitted_image_size(texture.size, (radius*1.65, radius*1.65))
+                    Color(1, 1, 1, 1)
+                    Rectangle(texture=texture, pos=(cx-width/2, cy-height/2), size=(width, height))
+                # The photograph is context only. The overlay displays the signed
+                # angle in the named plane, without inferring the sensor mounting.
+                Color(*MUTED[:3], .38)
+                Line(points=[cx-radius, cy, cx+radius, cy], width=dp(.65), dash_length=dp(5))
+                self._text('0°', cx+radius-dp(4), cy+dp(16), 12)
+                ux, uy = inclination_geometry(value, self.progress)
+                length = radius * .9
+                points = [cx-length*ux, cy-length*uy, cx+length*ux, cy+length*uy]
+                # White underlay keeps the functional indicator readable over
+                # both the white transducer head and the dark instrument body.
+                Color(1, 1, 1, .95)
+                Line(points=points, width=dp(5), cap='round')
+                Color(*ACCENT)
+                Line(points=points, width=dp(2.5), cap='round')
+                if kind == 'pitch':
+                    self._arrow(cx, cy, cx+length*ux, cy+length*uy)
+                else:
+                    # Transverse balance beam: end caps rotate with the signed
+                    # angle; Pitch retains its longitudinal arrow instead.
+                    for sign in (-1, 1):
+                        ex, ey = cx+sign*length*ux, cy+sign*length*uy
+                        cap = dp(11)
+                        endpoints = [ex-cap*uy, ey+cap*ux, ex+cap*uy, ey-cap*ux]
+                        Color(1, 1, 1, .95)
+                        Line(points=endpoints, width=dp(4), cap='round')
+                        Color(*ACCENT)
+                        Line(points=endpoints, width=dp(2), cap='round')
+                Ellipse(pos=(cx-dp(5), cy-dp(5)), size=(dp(10), dp(10)))
+                self._text('frente / trás' if kind == 'pitch' else 'esq. / dir.',
+                           cx, self.top-dp(17), 12)
+                self._text('Pitch • longitudinal' if kind == 'pitch' else 'Roll • lateral',
+                           cx, self.y+dp(18), 14)
             elif kind == 'level':
-                low, high = visual_scale(value, kind)
+                ticks = measurement_ticks(self.measurement)
+                low, high = ticks[0], ticks[-1]
                 x = self.x + self.width * .43
                 bottom, top = self.y + dp(28), self.top - dp(28)
                 Color(*PALE)
-                RoundedRectangle(pos=(x-dp(4), bottom), size=(dp(8), top-bottom), radius=[dp(4)])
-                for i in range(9):
-                    y = bottom + (top - bottom) * i / 8
+                RoundedRectangle(pos=(x-dp(6), bottom), size=(dp(12), top-bottom), radius=[dp(4)])
+                for tick, label in zip(ticks, tick_labels(ticks)):
+                    y = bottom + (top - bottom) * (tick-low)/(high-low)
                     Color(*MUTED)
                     Line(points=[x - dp(8), y, x + dp(8), y], width=1)
-                    self._text(f'{low + (high-low)*i/8:.2f}', x - dp(46), y)
+                    self._text(label, x - dp(46), y)
                 fraction = (value-low)/(high-low)
                 y = bottom + fraction * self.progress * (top-bottom)
-                self._arrow(x + dp(62), y, x + dp(14), y)
+                self._arrow(x + dp(54), y, x + dp(14), y)
+                Ellipse(pos=(x-dp(5), y-dp(5)), size=(dp(10), dp(10)))
             elif kind in ('speed', 'battery'):
-                low, high = visual_scale(value, kind)
-                # Volts are not state-of-charge; use the labelled automatic scale.
-                if kind == 'battery' and self.measurement.unit.strip() == '%' and 0 <= value <= 100:
-                    low, high = 0, 100
+                ticks = measurement_ticks(self.measurement)
+                low, high = ticks[0], ticks[-1]
                 x, width = self.x + dp(32), max(dp(20), self.width-dp(64))
                 height = dp(64 if kind == 'battery' else 24)
                 Color(*PALE)
@@ -151,19 +201,47 @@ class MeasurementGraphic(Widget):
                     Line(rounded_rectangle=(x-dp(5), cy-height/2-dp(5), width+dp(10), height+dp(10), dp(10)), width=dp(1.5))
                     Rectangle(pos=(x+width+dp(5), cy-dp(10)), size=(dp(6), dp(20)))
                 if fraction > 0:
-                    Rectangle(pos=(x, cy-height/2), size=(width*fraction, height))
-                self._text(f'{low:g}', x, cy-height/2-dp(25))
-                self._text(f'{high:g}', x+width, cy-height/2-dp(25))
-                self._arrow(x+width*fraction, cy+height/2+dp(40), x+width*fraction, cy+height/2+dp(8))
+                    RoundedRectangle(pos=(x, cy-height/2), size=(width*fraction, height),
+                                     radius=[min(dp(8), width*fraction/2)])
+                labels = tick_labels(ticks)
+                if kind == 'speed':
+                    for tick, label in zip(ticks[1:-1], labels[1:-1]):
+                        tick_x = x + width * (tick-low)/(high-low)
+                        Color(*MUTED)
+                        Line(points=[tick_x, cy-height/2-dp(4), tick_x, cy-height/2-dp(9)], width=1)
+                        self._text(label, tick_x, cy-height/2-dp(25), 12)
+                self._text(labels[0], x, cy-height/2-dp(25))
+                self._text(labels[-1], x+width, cy-height/2-dp(25))
+                marker_x = x+width*fraction
+                Color(*ACCENT)
+                Line(points=[marker_x, cy-height/2-dp(5), marker_x, cy+height/2+dp(5)], width=dp(2))
+                Ellipse(pos=(marker_x-dp(4), cy+height/2+dp(6)), size=(dp(8), dp(8)))
+            elif kind == 'rain':
+                # Precipitation symbol, not a capacity gauge or a rainfall rate.
+                Color(*PALE)
+                Ellipse(pos=(cx-dp(64), cy+dp(5)), size=(dp(72), dp(58)))
+                Ellipse(pos=(cx-dp(22), cy+dp(22)), size=(dp(78), dp(64)))
+                RoundedRectangle(pos=(cx-dp(60), cy), size=(dp(124), dp(42)), radius=[dp(20)])
+                Color(*ACCENT)
+                Line(points=[cx-dp(66), cy-dp(72), cx-dp(66), cy-dp(84),
+                             cx+dp(66), cy-dp(84), cx+dp(66), cy-dp(72)], width=dp(2))
+                if value > 0:
+                    Color(*ACCENT[:3], self.progress)
+                    for offset in (-36, 0, 36):
+                        Line(points=[cx+dp(offset+4), cy-dp(22), cx+dp(offset-4), cy-dp(44)],
+                             width=dp(2.5), cap='round')
+                else:
+                    self._text('0 mm' if value == 0 else 'Valor informado', cx, cy-dp(38), 18)
             elif kind in ('wave_height', 'wave_period'):
                 x, width = self.x+dp(32), max(dp(20), self.width-dp(64))
-                amplitude = dp(45) * self.progress
+                amplitude = dp(45)
                 points = []
                 for i in range(121):
                     points.extend((x+width*i/120, cy+amplitude*sin(4*pi*i/120)))
                 Color(*PALE)
                 Line(points=[x, cy, x+width, cy], width=1)
                 Color(*ACCENT)
+                Color(*ACCENT[:3], self.progress)
                 Line(points=points, width=dp(3))
                 if kind == 'wave_height':
                     self._arrow(cx, cy-dp(45), cx, cy+dp(45))
@@ -171,7 +249,7 @@ class MeasurementGraphic(Widget):
                     self._arrow(x+width/8, cy+dp(68), x+width*5/8, cy+dp(68))
                 self._text('Altura' if kind == 'wave_height' else 'Período', cx, cy-dp(85))
             else:
-                # Neutral vector symbol, including rain and missing measurements.
+                # Neutral vector symbol for unsupported or missing measurements.
                 Color(*PALE)
                 Ellipse(pos=(cx-dp(60), cy-dp(60)), size=(dp(120), dp(120)))
                 Color(*ACCENT)
@@ -194,9 +272,9 @@ def text_label(text, height, size, color=INK):
 class MeasurementPage(ScrollView):
     def __init__(self, measurement, **kwargs):
         super().__init__(do_scroll_x=False, **kwargs)
-        body = BoxLayout(orientation='vertical', spacing=dp(6), size_hint_y=None)
+        body = BoxLayout(orientation='vertical', spacing=dp(4), size_hint_y=None)
         body.bind(minimum_height=body.setter('height'))
-        body.add_widget(text_label(measurement.name, 56, 23))
+        body.add_widget(text_label(measurement.name, 48, 23))
         body.add_widget(text_label(measurement.display_value if measurement.number is not None else 'Sem dado', 76, 48))
         body.add_widget(text_label(measurement.unit, 28, 20, MUTED))
         self.graphic = detail_renderer(measurement)
@@ -207,15 +285,19 @@ class MeasurementPage(ScrollView):
         caption = ''
         if kind == 'direction':
             caption = direction_geometry(measurement.number)[2] + ' • Norte = 0°'
+        elif kind in ('pitch', 'roll'):
+            caption = 'Ângulo informado • referência horizontal = 0°'
         elif kind in ('speed', 'level', 'battery'):
             caption = 'Escala visual automática • sem limites operacionais'
             if kind == 'battery':
                 caption = ('Carga informada pelo equipamento' if measurement.unit.strip() == '%' and 0 <= measurement.number <= 100
                            else 'Escala visual automática • não indica % de carga')
+        elif kind == 'rain':
+            caption = 'Precipitação informada pelo equipamento'
         elif kind in ('wave_height', 'wave_period'):
             caption = 'Esquema ilustrativo • sem dados históricos'
         body.add_widget(text_label(caption, 48, 13, MUTED))
-        body.add_widget(text_label('Registro: ' + friendly_timestamp(measurement.timestamp), 48, 14, MUTED))
+        body.add_widget(text_label('Registro: ' + friendly_timestamp(measurement.timestamp), 32, 14, MUTED))
         self.add_widget(body)
 
 
