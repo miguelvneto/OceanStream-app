@@ -32,7 +32,7 @@ class DirectionalHorizontalScrollView(ScrollView):
             return False
         if self.disabled:
             return True
-        touch.ud[key] = {'axis': None, 'native': False}
+        touch.ud[key] = {'axis': None, 'native': False, 'tap': True}
         self._direction_touches[touch.uid] = touch
         # Reserve until the direction is known. Do not start an effect or a
         # scroll_timeout timer: a slow finger must still be classifiable.
@@ -42,6 +42,8 @@ class DirectionalHorizontalScrollView(ScrollView):
         state = touch.ud.get(self._direction_key())
         if state is None:
             return False
+        if max(abs(touch.x - touch.ox), abs(touch.y - touch.oy)) >= self.direction_threshold:
+            state['tap'] = False
         if state['axis'] is None:
             # Kivy transforms both current and original coordinates together.
             dx, dy = abs(touch.x - touch.ox), abs(touch.y - touch.oy)
@@ -76,7 +78,8 @@ class DirectionalHorizontalScrollView(ScrollView):
                 return False
             if state['native']:
                 super().on_scroll_stop(touch, check_children=False)
-            elif state['axis'] is None:
+            elif (state['axis'] is None and state['tap']
+                  and max(abs(touch.x - touch.ox), abs(touch.y - touch.oy)) < self.direction_threshold):
                 # Preserve tap delivery without starting/stopping a scroll effect.
                 self.simulate_touch_down(touch)
                 Clock.schedule_once(partial(self._do_touch_up, touch), .2)

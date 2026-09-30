@@ -32,6 +32,8 @@ from kivymd.uix.dialog import MDDialog
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
 from directional_scrollview import DirectionalHorizontalScrollView
+from measurement_model import Measurement, equipment_snapshot
+from measurement_detail import MeasurementTile, MeasurementDetailModal
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
@@ -431,10 +433,11 @@ class CardOverview(MDCard):
         )
         image_row.bind(minimum_width=image_row.setter('width'))
 
-        for source, top_text, bottom_text in imagens_dados:
+        for source, top_text, bottom_text, measurement in imagens_dados:
             bottom_text = adiciona_unidade(nome=top_text, valor=str(bottom_text))
 
-            layout = BoxLayout(orientation='vertical', size_hint=(None, 1), width=self.tamanho[0], spacing=0)
+            layout = MeasurementTile(measurement=measurement, open_detail=self.open_measurement,
+                                     orientation='vertical', size_hint=(None, 1), width=self.tamanho[0], spacing=0)
             top_label = Label(text=top_text, size_hint=(1, None), height=dp(25), color=(0, 0, 0, 1))
             img = Image(source=source, size_hint=(1, None), height=self.tamanho[1], allow_stretch=True, keep_ratio=True)
             bottom_label = Label(text=bottom_text, size_hint=(1, None), height=dp(20), color=(0, 0, 0, 1))
@@ -454,6 +457,7 @@ class Overview(MDScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cards = []
+        self._measurement_detail = None
         dados_cards = load_cards_json()
         self.card_configs = dados_cards.get('cartoes', [])
 
@@ -475,6 +479,25 @@ class Overview(MDScreen):
             'Dir. Vento': 'Direcao_Vento',
             'Chuva': 'Chuva',
         }
+
+    def open_measurement(self, measurement):
+        if self._measurement_detail is not None:
+            return
+        try:
+            measurements = (item[3] for card in getattr(self, 'cards_data', ())
+                            for item in card['imagens_dados'])
+            group, index = equipment_snapshot(measurements, measurement)
+            detail = MeasurementDetailModal(group, initial_index=index)
+            self._measurement_detail = detail
+            detail.bind(on_dismiss=self._measurement_closed)
+            detail.open()
+        except Exception:
+            self._measurement_detail = None
+            Logger.exception("Overview: falha ao abrir detalhe da grandeza")
+
+    def _measurement_closed(self, instance):
+        if self._measurement_detail is instance:
+            self._measurement_detail = None
 
     def on_enter(self):
         self.genereate_cards()
@@ -578,7 +601,10 @@ class Overview(MDScreen):
             for param in selected_parameters[equipment]:
                 if param in PARAMETROS_IMAGENS:
                     coluna = self.dicionario_parametros[param]
+                    row, raw_value = {}, None
                     try:
+                        row = dados[1 if 'PNORW' in coluna else 0] if awac else dados
+                        raw_value = row.get(coluna)
                         if awac:
                             if 'PNORW' in coluna:
                                 dado = f"{float(dados[1][coluna]):.2f}"
@@ -588,7 +614,12 @@ class Overview(MDScreen):
                             dado = f"{float(dados[coluna]):.2f}"
                     except Exception:
                         dado = "-"
-                    imagens_dados.append((PARAMETROS_IMAGENS[param], param, dado))
+                    measurement = Measurement(
+                        name=param, value=raw_value, display_value=dado,
+                        unit=UNIDADES_MEDIDA.get(param, ''), icon=PARAMETROS_IMAGENS[param],
+                        origin=equipment, timestamp=str(row.get('TmStamp') or '') if isinstance(row, dict) else '',
+                    )
+                    imagens_dados.append((PARAMETROS_IMAGENS[param], param, dado, measurement))
 
             cards_data.append({
                 'equipment': equipment,
@@ -621,6 +652,7 @@ class Overview(MDScreen):
             self.ids.card_container.add_widget(header_card)
 
             new_card = CardOverview()
+            new_card.open_measurement = self.open_measurement
             self.card_maximizado(new_card, card_info['config'], card_info['data_hora'], card_info['idx'], imagens_dados=card_info['imagens_dados'])
             self.cards.append(new_card)
             self.ids.card_container.add_widget(new_card)
