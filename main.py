@@ -2,7 +2,6 @@
 # OceanStream – Kivy/KivyMD (iOS + desktop)
 # Requer: kivy 2.3.x, KivyMD 1.2.x, kivy-ios, kivy-garden.graph (no iOS)
 
-# VERSAO_ATUAL = '0.3.4'
 VERSAO_ATUAL = '0.4.1'
 
 from kivy.resources import resource_add_path, resource_find
@@ -272,6 +271,39 @@ def api_lastestVersion():
         Logger.exception(f"API lastestVersion erro: {e}")
         return None
 
+def get_usuario_id_jwt():
+    """Obtém o ID do usuário do campo sub do JWT (ex.: 14,test)."""
+    try:
+        token = get_access_token()
+        if not token or not is_token_valid(token):
+            return None
+        payload = jwt.decode(token, options={"verify_signature": False})
+        usuario_id = int(str(payload.get("sub", "")).split(",", 1)[0].strip())
+        return usuario_id if usuario_id > 0 else None
+    except (ValueError, TypeError, jwt.PyJWTError) as e:
+        Logger.warning(f"Feedback: não foi possível extrair ID do JWT: {e}")
+        return None
+
+
+def api_avisar_feedback(usuario_id):
+    """Consulta a autorização para apresentar o popup ao usuário."""
+    try:
+        print(f'_auth_headers: {_auth_headers()}')
+        response = requests.get(
+            API_PRFX + f"avisar_feedback/{usuario_id}",
+            headers=_auth_headers(),
+            timeout=HTTP_TIMEOUT,
+        )
+        print(f'api_avisar_feedback: response.status_code={response.status_code}, response.text={response.text}')
+        if response.status_code != 200:
+            Logger.warning(f"Feedback: API retornou HTTP {response.status_code}")
+            return False
+        return response.json() is True
+    except Exception as e:
+        Logger.warning(f"Feedback: falha na requisição: {e}")
+        return False
+
+
 # =====================================================================
 #                    MAPAS / TABELAS / ARQUIVOS DE UI
 # =====================================================================
@@ -495,6 +527,69 @@ class Overview(MDScreen):
             'Dir. Vento': 'Direcao_Vento',
             'Chuva': 'Chuva',
         }
+
+    def popup_feedback(self):
+        """Exibe o convite para avaliação na Play Store."""
+        if getattr(self, "_feedback_dialog", None):
+            return
+
+        botao_sim = MDFlatButton(text="Sim", on_release=self._feedback_sim)
+        botao_nao = MDFlatButton(text="Não", on_release=self._feedback_nao)
+        self._feedback_dialog = MDDialog(
+            title="Sua opinião é importante!",
+            text=(
+                "Nos ajude a continuar melhorando o app.\n\n"
+                "Gostaria de realizar um feedback na página oficial da Play Store?"
+            ),
+            buttons=[botao_nao, botao_sim],
+            auto_dismiss=True,
+        )
+        self._feedback_dialog.bind(on_dismiss=self._feedback_dialog_fechado)
+        self._feedback_dialog.open()
+
+    def _feedback_dialog_fechado(self, *args):
+        self._feedback_dialog = None
+
+    def _feedback_nao(self, *args):
+        if self._feedback_dialog:
+            self._feedback_dialog.dismiss()
+
+    def _feedback_sim(self, *args):
+        self._feedback_nao()
+        try:
+            import webbrowser
+            webbrowser.open(
+                "https://play.google.com/store/apps/details?id=org.oceanstream.oceanstream"
+            )
+        except Exception as e:
+            Logger.exception(f"Feedback: erro ao abrir Play Store: {e}")
+
+    def verificar_feedback(self):
+        """Consulta a API fora da thread da interface, apenas no Android."""
+        if IS_IOS:
+            return
+        usuario_id = get_usuario_id_jwt()
+        if usuario_id is None:
+            return
+        token_consultado = get_access_token()
+
+        def consultar():
+            print('verificando feedback...')
+            if api_avisar_feedback(usuario_id):
+                Clock.schedule_once(
+                    lambda dt: self._mostrar_feedback_se_logado(token_consultado), 0
+                )
+
+        Thread(target=consultar, daemon=True).start()
+
+    def _mostrar_feedback_se_logado(self, token_consultado):
+        app = MDApp.get_running_app()
+        if (
+            app.gerenciador.current == "overview"
+            and get_access_token() == token_consultado
+            and is_token_valid(token_consultado)
+        ):
+            self.popup_feedback()
 
     def on_enter(self):
         self.genereate_cards()
@@ -1214,6 +1309,9 @@ class TelaLogin(MDScreen):
         try:
             app = MDApp.get_running_app()
             app.gerenciador.current = 'overview'
+            if not IS_IOS:
+                overview = app.gerenciador.get_screen('overview')
+                Clock.schedule_once(lambda dt: overview.verificar_feedback(), 0.5)
         except Exception as e:
             Logger.exception(f"Erro ao redirecionar para overview: {e}")
             # Fallback: tenta novamente após um delay

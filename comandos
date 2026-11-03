@@ -34,11 +34,18 @@ pip freeze > requirements.txt
 ////////////////
 comandos no prompt:
 
+wsl --install
 wsl --set-default-version 2
-wsl --install Ubuntu-22.04
+
+wsl --install ubuntu
 unix user: environlink
 unix password: JRuano
 
+****para acessar: wsl -d ubuntu
+****para desinstalar: wsl --unregister ubuntu
+
+
+////////////////
 comandos no WSL:
 
 sudo apt update && sudo apt upgrade -y
@@ -49,10 +56,28 @@ pip install cython==3.0.12
 echo 'export PATH=$PATH:~/.local/bin' >> ~/.bashrc
 source ~/.bashrc
 
+ - criar a pasta buildozer linux
+cd ~
+mkdir OceanStream_buildozer
+cp -a /mnt/c/OceanStream_buildozer ~/OceanStream_buildozer
 
- - comando para acessar a pasta
-(cd /mnt/c/caminho/para/a/pasta)
-cd /mnt/c/Prog/Projetos/OceanStream_buildozer
+ - acessar a pasta buildozer linux
+cd ~
+cd ~/OceanStream_buildozer
+pwd
+
+ - cria ambiente virtual
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+pip install buildozer
+buildozer --version
+buildozer init
+
+ - executa ambiente virtual
+source .venv/bin/activate
+ - (verificar se realmente precisa este comando) variável de ambinte para biblioteca "materialyoucolor"
+export MYCP_PURE_PYTHON=1
 
  - gerar apk
 buildozer -v android debug
@@ -66,10 +91,10 @@ keytool -genkey -v -keystore evlmetocean.keystore -alias evlmetocean -keyalg RSA
  - a chave em uso está presente nesta mesma pasta sob o nome "evlmetocean.keystore" | a senha é "JRuano" (sem as aspas)
 
  - comando para incorporar a assinatura ao .aab:
-jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore evlmetocean.keystore bin/oceanstream-0.3-arm64-v8a_armeabi-v7a-release.aab evlmetocean
- -- LEMBRAR DE ALTERAR A VERSÃO A CADA NOVA RENDERIZAÇÃO                                              AQUI /\ e colocar conforme estiver no version do buildozer.spec
+jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore .wsl/evlmetocean.keystore bin/oceanstream-0.4.1-arm64-v8a-release.aab evlmetocean
+ -- LEMBRAR DE ALTERAR A VERSÃO A CADA NOVA RENDERIZAÇÃO                                                    AQUI /\ e colocar conforme estiver no version do buildozer.spec
  - comando para verificar se o .aab possui assinaturas:
-jarsigner -verify -verbose -certs bin/oceanstream-0.3-arm64-v8a_armeabi-v7a-release.aab
+jarsigner -verify -verbose -certs bin/oceanstream-0.4.1-arm64-v8a-release.aab
 
  - para verificar o versionCode de um aab/apk
 sudo apt install aapt
