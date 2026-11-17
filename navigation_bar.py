@@ -43,15 +43,14 @@ class NavigationBar(MDBoxLayout):
             icon_size=dp(80),
             theme_text_color="Custom",
             text_color=(1, 1, 1, 1),
-            pos_hint={"center_x": 0.5},
-            y=self.toolbar.height - dp(40),  # posição inicial (ajustada via bind abaixo)
+            pos_hint={"center_x": 0.5, "center_y": 0.5},
             on_release=self.toggle_toolbar
         )
         self.logo_container.add_widget(self.expand_button)
         self.toolbar.add_widget(self.logo_container)
 
         # atualiza a posição da logo conforme altura da barra
-        self.toolbar.bind(height=self.update_logo_position)
+
 
         self.options_box = BoxLayout(
             orientation='vertical',
@@ -121,7 +120,7 @@ class NavigationBar(MDBoxLayout):
         self.toolbar.add_widget(self.options_box)
         self.add_widget(self.toolbar)
         self.bind(bottom_inset=self._position_above_system)
-        self.toolbar.bind(height=self._position_above_system, pos=self.update_logo_position)
+        self.toolbar.bind(height=self._position_above_system)
         self._position_above_system()
 
     def _position_above_system(self, *args):

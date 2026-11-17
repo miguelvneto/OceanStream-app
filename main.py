@@ -1368,7 +1368,7 @@ class OceanStream(MDApp):
         self.root_layout = FloatLayout()
         self.gerenciador = GerenciadorTelas()
 
-        #self.gerenciador.add_widget(SplashScreen(name='splash'))
+        # Splash Kivy desativada: utilizamos apenas a Launch Screen nativa.
         self.gerenciador.add_widget(Overview(name='overview'))
         self.gerenciador.add_widget(Alertas(name='alertas'))
         self.gerenciador.add_widget(TelaLogin(name='login'))
@@ -1379,8 +1379,20 @@ class OceanStream(MDApp):
         self.gerenciador.size_hint = (1, 1)
         self.root_layout.add_widget(self.gerenciador)
 
-        # Inicial
-        self.gerenciador.current = 'login'
+        # Entrada direta, preservando a autenticação existente.
+        token = get_access_token()
+        if is_token_valid(token):
+            self.gerenciador.current = 'overview'
+        else:
+            delete_access_token()
+            self.gerenciador.current = 'login'
+
+        # Garante a inicialização da navegação mesmo quando
+        # a tela inicial já é o overview.
+        self.on_screen_change(
+            self.gerenciador,
+            self.gerenciador.current
+        )
         return self.root_layout
 
     def on_start(self):
